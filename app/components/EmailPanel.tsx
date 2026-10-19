@@ -15,7 +15,7 @@ import ThreadMessage from "~/components/email-panel/ThreadMessage";
 import { splitEmailList, toEmailListValue } from "~/lib/utils";
 import api from "~/services/api";
 import { formatDetailDate } from "shared/dates";
-import { useBulkEmails, useDeleteEmail, useEmail, useMarkThreadRead, useMarkNotSpam, useMarkSpam, useMoveEmail, useReplyToEmail, useSendEmail, useThreadReplies, useUpdateEmail } from "~/queries/emails";
+import { useBulkEmails, useScheduledAction, useDeleteEmail, useEmail, useMarkThreadRead, useMarkNotSpam, useMarkSpam, useMoveEmail, useReplyToEmail, useSendEmail, useThreadReplies, useUpdateEmail } from "~/queries/emails";
 import { useFolders } from "~/queries/folders";
 import { useMailbox } from "~/queries/mailboxes";
 import { useUIStore } from "~/hooks/useUIStore";
@@ -65,6 +65,7 @@ export default function EmailPanel({ emailId, mailboxId: mailboxOverride, folder
 	const markSpamMut = useMarkSpam();
 	const markNotSpamMut = useMarkNotSpam();
 	const bulkEmailsMut = useBulkEmails();
+	const scheduledMut = useScheduledAction();
 	const sendEmailMut = useSendEmail();
 	const replyMut = useReplyToEmail();
 	const { data: folders = [] } = useFolders(mailboxId) as { data?: Folder[] };
@@ -146,6 +147,16 @@ export default function EmailPanel({ emailId, mailboxId: mailboxOverride, folder
 			closePanel();
 		} catch (error) {
 			toastManager.add({ title: error instanceof Error ? error.message : "Could not snooze this email", variant: "error" });
+		}
+	};
+	const handleScheduled = async (action: "cancel" | "send") => {
+		if (!mailboxId) return;
+		try {
+			await scheduledMut.mutateAsync({ mailboxId, id: email.id, action });
+			toastManager.add({ title: action === "send" ? "Email sent!" : "Moved back to Drafts" });
+			closePanel();
+		} catch (error) {
+			toastManager.add({ title: error instanceof Error ? error.message : "Could not update this email", variant: "error" });
 		}
 	};
 	const handleDelete = () => { if (mailboxId) { if (!window.confirm("Are you sure you want to delete this email?")) return; deleteEmailMut.mutate({ mailboxId, id: email.id }); closePanel(); } };
@@ -253,9 +264,16 @@ export default function EmailPanel({ emailId, mailboxId: mailboxOverride, folder
 				onDelete={handleDelete}
 				onSnooze={handleSnooze}
 				isSnoozing={bulkEmailsMut.isPending}
+				onSendScheduledNow={() => handleScheduled("send")}
+				onCancelScheduled={() => handleScheduled("cancel")}
+				isScheduleBusy={scheduledMut.isPending}
 			/>
 
 			<div className="mail-reader-scroll min-h-0 flex-1 overflow-y-auto">
+			{email.folder_id === Folders.SCHEDULED && email.send_at && <div role="status" className="mx-4 mt-2 rounded-xl border border-kumo-line px-4 py-3 text-sm">
+				<p>Sends {formatDetailDate(email.send_at)}. Use the toolbar to send now or cancel.</p>
+				{email.send_error && <p className="mt-1 text-kumo-danger">Last try failed: {email.send_error}{(email.send_attempts ?? 0) >= 3 ? " No more automatic tries." : ""}</p>}
+			</div>}
 			<EmailPanelHeader
 				subject={email.subject}
 				starred={email.starred}

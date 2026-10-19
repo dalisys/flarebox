@@ -312,3 +312,20 @@ export function useForwardEmail() {
 		onSuccess: (_data, { mailboxId }) => invalidate(mailboxId),
 	});
 }
+
+export function useScheduledAction() {
+	const invalidate = useInvalidateEmailData();
+	return useMutation({
+		mutationFn: ({ mailboxId, id, action }: { mailboxId: string; id: string; action: "cancel" | "send" }) =>
+			action === "cancel" ? api.cancelScheduled(mailboxId, id) : api.sendScheduledNow(mailboxId, id),
+		onSettled: (_data, _error, { mailboxId }) => invalidate(mailboxId),
+	});
+}
+
+export function useScheduleEmail() {
+	const invalidate = useInvalidateEmailData();
+	return useMutation({
+		mutationFn: ({ mailboxId, data }: { mailboxId: string; data: Parameters<typeof api.scheduleEmail>[1] }) => api.scheduleEmail(mailboxId, data),
+		onSettled: (_data, _error, { mailboxId }) => invalidate(mailboxId),
+	});
+}

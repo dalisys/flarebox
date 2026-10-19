@@ -44,11 +44,19 @@ Select messages to archive, delete, or mark read or unread. In Junk, use **Empty
 
 ## Snooze
 
-Snooze hides a conversation until a time you choose. Open the email and tap the clock button in the toolbar. Pick **Later today** (18:00), **Tomorrow** (08:00), **This weekend** (Saturday 08:00), **Next week** (Monday 08:00), or pick a date and time. You can also select many conversations and tap **Snooze** in the selection bar.
+Snooze hides a conversation until a time you choose. Open the email and tap the clock button in the toolbar. Pick **Later today** (18:00), **Tomorrow** (08:00), **This weekend** (Saturday 08:00), **Next week** (Monday 08:00), or tap **Pick date & time** for a calendar and a time list in 15-minute steps. On a phone the choices open as a sheet at the bottom of the screen. You can also select many conversations and tap **Snooze** in the selection bar.
 
 Snoozed mail moves to the **Snoozed** folder. Each row shows when it comes back. At that time it returns to the Inbox as unread, at the top of the list. If push notifications are on, you also get a notification. To bring mail back early, open it in Snoozed and tap the **Unsnooze** button.
 
 Times use your device time zone. The server stores them in UTC and wakes the mail with a Durable Object alarm, so the browser does not need to be open. Mail in Sent, Drafts, Deleted, and Junk cannot be snoozed.
+
+## Send later
+
+Send later sends a message at a time you choose. In the compose window, tap the calendar button next to **Send**. Pick **Tomorrow morning** (08:00), **Tomorrow afternoon** (13:00), **Monday morning** (08:00), or pick a date and time.
+
+The message waits in the **Scheduled** folder. Each row shows when it will be sent. Open it to use **Send now**, or **Cancel send** to move it back to Drafts, where you can edit it.
+
+At the send time, Flarebox sends the message the same way as the **Send** button. The copy goes to Sent and replies stay in their conversation. The browser does not need to be open. If a send fails, the row shows **Failed** and the reason. Flarebox tries 3 times in total (5 and 10 minutes apart) and then stops. Use **Send now** to try again.
 
 ## Mobile app
 

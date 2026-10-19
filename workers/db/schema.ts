@@ -31,6 +31,10 @@ export const emails = sqliteTable("emails", {
 	raw_headers: text("raw_headers"),
 	snoozed_until: text("snoozed_until"),
 	woke_at: text("woke_at"),
+	send_at: text("send_at"),
+	send_request: text("send_request"),
+	send_error: text("send_error"),
+	send_attempts: integer("send_attempts").notNull().default(0),
 });
 
 export const attachments = sqliteTable("attachments", {

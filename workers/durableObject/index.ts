@@ -12,6 +12,7 @@ import { Folders } from "../../shared/folders";
 import type { Env } from "../types";
 import { applyMigrations, mailboxMigrations } from "./migrations";
 import { notifyNewEmail } from "../lib/push";
+import { isDue, nextAlarmTime, retryTime, type AlarmItem } from "../lib/alarm";
 
 /**
  * SQL expression to normalize email subjects by stripping common
@@ -344,7 +345,7 @@ export class MailboxDO extends DurableObject<Env> {
 			SELECT
 				lif.id, lif.subject, lif.sender, lif.recipient, lif.date,
 				lif.read, lif.starred, lif.thread_id, lif.folder_id,
-				lif.in_reply_to, lif.email_references, lif.snoozed_until,
+				lif.in_reply_to, lif.email_references, lif.snoozed_until, lif.send_at, lif.send_error,
 				SUBSTR(lif.body, 1, 300) as snippet,
 				cs.thread_count, cs.thread_unread_count, cs.participants,
 				MAX(lif.date, COALESCE(cs.woke_at, lif.date)) as sort_date,
@@ -612,18 +613,91 @@ export class MailboxDO extends DurableObject<Env> {
 		if (action === "snooze" || action === "unsnooze") {
 			// The alarm has no request context, so keep the address for the push link.
 			if (mailboxId) await this.ctx.storage.put("mailboxId", mailboxId);
-			await this.scheduleSnoozeAlarm();
+			await this.scheduleAlarm();
 		}
 		return result;
 	}
 
-	// ── Snooze wake-up (Durable Object alarm) ──────────────────────
-	// The only alarm user in this object; set to the earliest due snooze.
+	// ── Alarm: snooze wake-up and scheduled send ───────────────────
+	// One alarm serves both; it is always set to the earliest waiting item.
 
-	private async scheduleSnoozeAlarm() {
-		const row = [...this.ctx.storage.sql.exec("SELECT MIN(snoozed_until) AS next FROM emails WHERE folder_id = ?", Folders.SNOOZED)][0];
-		if (row?.next) await this.ctx.storage.setAlarm(Date.parse(String(row.next)));
+	private scheduledItems(): (AlarmItem & { id: string })[] {
+		return [...this.ctx.storage.sql.exec(
+			"SELECT id, send_at, send_attempts FROM emails WHERE folder_id = ? AND send_at IS NOT NULL",
+			Folders.SCHEDULED,
+		)].map((row) => ({ id: String(row.id), at: String(row.send_at), attempts: Number(row.send_attempts) }));
+	}
+
+	private async scheduleAlarm() {
+		const snooze = [...this.ctx.storage.sql.exec("SELECT MIN(snoozed_until) AS next FROM emails WHERE folder_id = ?", Folders.SNOOZED)][0];
+		const next = nextAlarmTime([...(snooze?.next ? [{ at: String(snooze.next) }] : []), ...this.scheduledItems()]);
+		if (next !== null) await this.ctx.storage.setAlarm(next);
 		else await this.ctx.storage.deleteAlarm();
+	}
+
+	async scheduleEmail(email: { id: string; subject: string; sender: string; recipient: string; cc: string | null; bcc: string | null; body: string; in_reply_to: string | null; thread_id: string; send_at: string; send_request: string }, mailboxId: string) {
+		this.ctx.storage.sql.exec(
+			`INSERT INTO emails (id, folder_id, subject, sender, recipient, cc, bcc, date, read, body, in_reply_to, thread_id, send_at, send_request)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+			email.id, Folders.SCHEDULED, email.subject, email.sender, email.recipient, email.cc, email.bcc,
+			new Date().toISOString(), email.body, email.in_reply_to, email.thread_id, email.send_at, email.send_request,
+		);
+		await this.ctx.storage.put("mailboxId", mailboxId);
+		await this.scheduleAlarm();
+	}
+
+	/** Back to Drafts, where it can be edited and sent again. */
+	async cancelScheduled(id: string) {
+		const result = this.ctx.storage.sql.exec(
+			"UPDATE emails SET folder_id = ?, send_at = NULL, send_request = NULL, send_error = NULL, send_attempts = 0, date = ? WHERE id = ? AND folder_id = ?",
+			Folders.DRAFT, new Date().toISOString(), id, Folders.SCHEDULED,
+		);
+		await this.scheduleAlarm();
+		return result.rowsWritten > 0;
+	}
+
+	async sendScheduledNow(id: string) {
+		const result = await this.sendScheduled(id);
+		await this.scheduleAlarm();
+		return result;
+	}
+
+	private sending = new Set<string>();
+
+	// Replays the saved request through the normal send routes, so the Sent
+	// copy, threading and rate limits work like the Send button.
+	private async sendScheduled(id: string): Promise<{ ok: true } | { error: string }> {
+		if (this.sending.has(id)) return { error: "This message is already being sent" };
+		const row = [...this.ctx.storage.sql.exec("SELECT send_request, send_attempts FROM emails WHERE id = ? AND folder_id = ?", id, Folders.SCHEDULED)][0];
+		const mailboxId = await this.ctx.storage.get<string>("mailboxId");
+		if (!row?.send_request || !mailboxId) return { error: "Scheduled message not found" };
+		this.sending.add(id);
+		let error: string;
+		try {
+			const { path, body } = JSON.parse(String(row.send_request)) as { path: string; body: string };
+			// Imported here to avoid a load-time import cycle with the API module.
+			const { app } = await import("../index");
+			const ctx = { waitUntil: (promise: Promise<unknown>) => this.ctx.waitUntil(promise), passThroughOnException() {}, props: {} } as unknown as ExecutionContext;
+			const response = await app.fetch(new Request(`https://flarebox.internal/api/v1/mailboxes/${encodeURIComponent(mailboxId)}${path}`, {
+				method: "POST", headers: { "Content-Type": "application/json" }, body,
+			}), this.env, ctx);
+			if (response.ok) {
+				this.ctx.storage.sql.exec("DELETE FROM emails WHERE id = ?", id);
+				return { ok: true };
+			}
+			error = ((await response.json().catch(() => null)) as { error?: string } | null)?.error || `Send failed (${response.status})`;
+		} catch (e) {
+			error = (e as Error).message || "Send failed";
+		} finally {
+			this.sending.delete(id);
+		}
+		const attempts = Number(row.send_attempts) + 1;
+		console.error(`Scheduled send ${id} failed (try ${attempts}):`, error);
+		this.ctx.storage.sql.exec(
+			"UPDATE emails SET send_error = ?, send_attempts = ?, send_at = ? WHERE id = ?",
+			error, attempts, retryTime(attempts, Date.now()), id,
+		);
+		return { error };
 	}
 
 	async alarm() {
@@ -632,7 +706,10 @@ export class MailboxDO extends DurableObject<Env> {
 			"UPDATE emails SET folder_id = ?, read = 0, snoozed_until = NULL, woke_at = ? WHERE folder_id = ? AND snoozed_until <= ? RETURNING id, sender, subject",
 			Folders.INBOX, now, Folders.SNOOZED, now,
 		)] as { id: string; sender: string | null; subject: string | null }[];
-		await this.scheduleSnoozeAlarm();
+		for (const item of this.scheduledItems()) {
+			if (isDue(item, Date.now())) await this.sendScheduled(item.id);
+		}
+		await this.scheduleAlarm();
 		const mailboxId = await this.ctx.storage.get<string>("mailboxId");
 		if (!woken.length || !mailboxId) return;
 		try {
@@ -719,8 +796,8 @@ export class MailboxDO extends DurableObject<Env> {
 	}
 
 	async moveEmail(id: string, folderId: string) {
-		// Snoozing needs a wake time, so it goes through bulkEmails("snooze").
-		if (folderId === Folders.SNOOZED) return false;
+		// Snoozed and Scheduled need a time, so they have their own methods.
+		if (folderId === Folders.SNOOZED || folderId === Folders.SCHEDULED) return false;
 		const folder = this.db
 			.select({ id: schema.folders.id })
 			.from(schema.folders)

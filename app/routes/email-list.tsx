@@ -22,8 +22,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { Folders } from "shared/folders";
 import { formatListDate, formatSnoozeDate } from "shared/dates";
-import { canSnooze } from "shared/snooze";
-import SnoozeMenu from "~/components/SnoozeMenu";
+import { canSnooze, snoozePresets } from "shared/schedule-time";
+import DateTimePicker from "~/components/DateTimePicker";
 import type { BulkAction } from "~/services/api";
 import MailboxSplitView from "~/components/MailboxSplitView";
 import EmailStarButton from "~/components/EmailStarButton";
@@ -176,6 +176,7 @@ export default function EmailListRoute() {
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 	const [bulkError, setBulkError] = useState("");
 	const [bulkSnoozeOpen, setBulkSnoozeOpen] = useState(false);
+	const bulkSnoozeButton = useRef<HTMLButtonElement>(null);
 
 	const queryClient = useQueryClient();
 	const updateEmail = useUpdateEmail();
@@ -293,6 +294,7 @@ export default function EmailListRoute() {
 	}, [mailboxId, openEmailId, emails, selectEmail, markThreadRead, updateEmail]);
 
 	const formatParticipants = (email: Email): string => {
+		if (folder === Folders.SCHEDULED) return senderName(email.recipient);
 		if (email.participants) {
 			const names = email.participants
 				.split(",")
@@ -390,15 +392,15 @@ export default function EmailListRoute() {
 				{(emails.length > 0 || selectedIds.size > 0) && <div className={`mail-selection-toolbar ${selectedIds.size ? "has-selection" : ""} flex flex-wrap items-center gap-2 border-b border-kumo-line px-4 py-2 md:px-5`}>
 					<label className="flex items-center gap-2 text-sm text-kumo-subtle"><input type="checkbox" aria-label="Select all loaded messages" checked={allVisibleSelected} onChange={() => setSelectedIds(allVisibleSelected ? new Set() : new Set(visibleIds))} />{selectedIds.size ? `${selectedIds.size} selected` : "Select all"}</label>
 					{selectedIds.size > 0 && <div className="flex flex-wrap items-center gap-1 ml-auto">
-						{folder !== Folders.ARCHIVE && folder !== Folders.TRASH && <Button variant="ghost" size="sm" icon={<ArchiveIcon size={16} />} disabled={bulkEmails.isPending} onClick={() => runBulk("archive")}>Archive</Button>}
+						{folder !== Folders.ARCHIVE && folder !== Folders.TRASH && folder !== Folders.SCHEDULED && <Button variant="ghost" size="sm" icon={<ArchiveIcon size={16} />} disabled={bulkEmails.isPending} onClick={() => runBulk("archive")}>Archive</Button>}
 						<Button variant="ghost" size="sm" icon={<EnvelopeOpenIcon size={16} />} disabled={bulkEmails.isPending} onClick={() => runBulk("read")}>Mark read</Button>
 						<Button variant="ghost" size="sm" icon={<EnvelopeSimpleIcon size={16} />} disabled={bulkEmails.isPending} onClick={() => runBulk("unread")}>Mark unread</Button>
-						{folder && canSnooze(folder) && <Button variant="ghost" size="sm" icon={<ClockIcon size={16} />} disabled={bulkEmails.isPending} aria-expanded={bulkSnoozeOpen} onClick={() => setBulkSnoozeOpen((value) => !value)}>Snooze</Button>}
+						{folder && canSnooze(folder) && <Button ref={bulkSnoozeButton} variant="ghost" size="sm" icon={<ClockIcon size={16} />} disabled={bulkEmails.isPending} aria-expanded={bulkSnoozeOpen} onClick={() => setBulkSnoozeOpen(true)}>Snooze</Button>}
 						{folder === Folders.SNOOZED && <Button variant="ghost" size="sm" icon={<ClockCountdownIcon size={16} />} disabled={bulkEmails.isPending} onClick={() => runBulk("unsnooze")}>Unsnooze</Button>}
 						<Button variant="ghost" size="sm" icon={<TrashIcon size={16} />} disabled={bulkEmails.isPending} onClick={() => runBulk("delete")}>{folder === Folders.TRASH ? "Delete permanently" : "Delete"}</Button>
 						<Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>Clear</Button>
 					</div>}
-					{bulkSnoozeOpen && selectedIds.size > 0 && <SnoozeMenu className="basis-full" disabled={bulkEmails.isPending} onPick={(until) => runBulk("snooze", until)} />}
+					{bulkSnoozeOpen && <DateTimePicker title="Snooze until" confirmLabel="Snooze" presets={snoozePresets()} anchor={bulkSnoozeButton} onClose={() => setBulkSnoozeOpen(false)} onPick={(date) => runBulk("snooze", date.toISOString())} />}
 				</div>}
 				{bulkError && <p role="alert" className="border-b border-kumo-line px-4 py-2 text-sm text-kumo-destructive">{bulkError}</p>}
 
@@ -428,7 +430,7 @@ export default function EmailListRoute() {
 										} ${isSelected ? "is-selected" : ""}`}
 									>
 										<input type="checkbox" aria-label={`Select ${email.subject || "message"}`} checked={selectedIds.has(email.id)} onClick={(event) => event.stopPropagation()} onChange={() => toggleSelected(email.id)} className="mail-row-checkbox" />
-										<SenderAvatar sender={folder === "sent" || folder === "draft" ? email.recipient : email.sender} />
+										<SenderAvatar sender={folder === "sent" || folder === "draft" || folder === Folders.SCHEDULED ? email.recipient : email.sender} />
 
 										{mailboxId && <EmailStarButton mailboxId={mailboxId} id={email.id} starred={email.starred} />}
 
@@ -458,7 +460,7 @@ export default function EmailListRoute() {
 													</Tooltip>
 												)}
 												<span className="mail-message-date text-kumo-subtle shrink-0 ml-auto">
-													{email.folder_id === Folders.SNOOZED && email.snoozed_until ? `Until ${formatSnoozeDate(email.snoozed_until)}` : formatListDate(email.date)}
+													{email.folder_id === Folders.SCHEDULED && email.send_at ? <>{email.send_error && <span className="mr-1 font-medium text-kumo-danger" title={email.send_error}>Failed ·</span>}Sends {formatSnoozeDate(email.send_at)}</> : email.folder_id === Folders.SNOOZED && email.snoozed_until ? `Until ${formatSnoozeDate(email.snoozed_until)}` : formatListDate(email.date)}
 												</span>
 											</div>
 											<div className="mail-message-preview text-sm mt-0.5">
