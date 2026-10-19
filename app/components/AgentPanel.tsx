@@ -19,7 +19,6 @@ import {
 	PencilSimpleIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useUIStore } from "~/hooks/useUIStore";
@@ -522,8 +521,7 @@ function AgentChatConnected({
 	);
 }
 
-export default function AgentPanel() {
-	const { mailboxId } = useParams<{ mailboxId: string }>();
+export default function AgentPanel({ mailboxId }: { mailboxId: string }) {
 	const [hooks, setHooks] = useState<{
 		useAgent: typeof import("agents/react").useAgent;
 		useAgentChat: typeof import("@cloudflare/ai-chat/react").useAgentChat;
@@ -567,7 +565,8 @@ export default function AgentPanel() {
 
 	return (
 		<AgentChatConnected
-			mailboxId={mailboxId ?? "default"}
+			key={mailboxId}
+			mailboxId={mailboxId}
 			useAgent={hooks.useAgent}
 			useAgentChat={hooks.useAgentChat}
 		/>

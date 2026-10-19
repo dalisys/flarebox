@@ -6,14 +6,14 @@ import { Button, Dialog, Input } from "@cloudflare/kumo";
 import {
 	ArchiveIcon, CaretDownIcon, CaretRightIcon, FileIcon, FolderIcon,
 	GearSixIcon, PaperPlaneTiltIcon, PencilSimpleIcon, PlusIcon, ShieldWarningIcon,
-	TrashIcon, TrayIcon, ClockCounterClockwiseIcon, EnvelopeSimpleIcon, XIcon, CaretLeftIcon,
+	TrashIcon, TrayIcon, ClockCounterClockwiseIcon, EnvelopeSimpleIcon, XIcon, CaretLeftIcon, RobotIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { Folders } from "shared/folders";
 import { useCreateFolder, useFolders } from "~/queries/folders";
-import { useMailboxes } from "~/queries/mailboxes";
+import { useAiEnabled, useMailboxes } from "~/queries/mailboxes";
 import { useUIStore } from "~/hooks/useUIStore";
 import { queryKeys } from "~/queries/keys";
 import api from "~/services/api";
@@ -82,7 +82,13 @@ export default function Sidebar() {
 	const allUnread = new Map<string, number>();
 	for (const query of folderQueries) for (const folder of query.data ?? []) allUnread.set(folder.id, (allUnread.get(folder.id) ?? 0) + folder.unreadCount);
 	const navigate = useNavigate();
-	const { closeSidebar, isDesktopSidebarCollapsed, toggleDesktopSidebar } = useUIStore();
+	const { closeSidebar, isDesktopSidebarCollapsed, toggleDesktopSidebar, openAgentPanel } = useUIStore();
+	const aiEnabled = useAiEnabled();
+	const openAssistant = () => {
+		openAgentPanel();
+		// Settings has no assistant; open it over All inboxes.
+		if (!mailboxId && location.pathname !== "/") navigate("/");
+	};
 	return <aside className="mail-sidebar flex h-full w-full shrink-0 flex-col">
 		<div className="flex min-h-20 items-center gap-3 px-6">
 			<EnvelopeSimpleIcon size={30} className="text-kumo-link" />
@@ -98,6 +104,7 @@ export default function Sidebar() {
 			}}>Compose</Button>
 		</div>
 		<nav className="flex-1 overflow-y-auto px-2 pb-5" aria-label="Mail folders">
+			{aiEnabled && <button type="button" onClick={openAssistant} className="mail-folder w-full text-left"><RobotIcon size={22} className="shrink-0" /><span className="min-w-0 flex-1 truncate">AI Assistant</span></button>}
 			<div className="mb-3 border-b border-kumo-line pb-3"><FolderItem to="/" label="All inboxes" icon={EnvelopeSimpleIcon} count={allUnread.get(Folders.INBOX)} /></div>
 			{primaryFolders.map(({ id, label, icon }) => <FolderItem key={id} to={`/?folder=${id}`} label={label} icon={icon} count={allUnread.get(id)} />)}
 			<div className="my-3 border-t border-kumo-line" />

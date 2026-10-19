@@ -474,3 +474,6 @@ button.mail-compose:hover { filter: brightness(1.08); box-shadow: 0 2px 6px rgb(
 	/* Keep chat lines readable on tablets */
 	.agent-sheet-body { width: 100%; max-width: 760px; margin: 0 auto; }
 }
+
+/* The floating Compose button must not cover dialogs (filters, menus) or the agent chat */
+body:has([role="dialog"]) .floating-compose, body:has(.agent-sheet) .floating-compose { display: none; }

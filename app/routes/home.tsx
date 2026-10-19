@@ -11,6 +11,7 @@ import EmailPanel from "~/components/EmailPanel";
 import Header from "~/components/Header";
 import MailNavigation from "~/components/MailNavigation";
 import FloatingCompose from "~/components/FloatingCompose";
+import AgentSheet from "~/components/AgentSheet";
 import { useBackToClose } from "~/hooks/useBackToClose";
 import { useUIStore } from "~/hooks/useUIStore";
 import { queryKeys } from "~/queries/keys";
@@ -22,7 +23,7 @@ export function meta() { return [{ title: "Mail · Flarebox" }]; }
 export default function HomeRoute() {
 	const { data: mailboxes = [], refetch, isFetched } = useMailboxes();
 	const { data: config } = useQuery({ queryKey: queryKeys.config, queryFn: ({ signal }) => api.getConfig(signal), staleTime: Infinity });
-	const { isComposing, startCompose, closeCompose, closePanel } = useUIStore();
+	const { isComposing, startCompose, closeCompose, closePanel, isAgentPanelOpen, agentMailboxId, setAgentMailboxId } = useUIStore();
 	const [selectedEmail, setSelectedEmail] = useState<{ id: string; mailboxId: string; folder: string } | null>(null);
 	const [messageOrder, setMessageOrder] = useState<{ id: string; mailboxId: string; folder: string }[]>([]);
 	const [searchParams] = useSearchParams();
@@ -30,6 +31,12 @@ export default function HomeRoute() {
 	const folder = searchParams.get("folder") || "inbox";
 	const searchQuery = searchParams.get("q");
 	const composeMailbox = mailboxes.find((mailbox) => !mailbox.retired);
+	// The agent works on one account: the one picked in the chat, else the first account.
+	const agentMailbox = mailboxes.find((mailbox) => mailbox.id === agentMailboxId && !mailbox.retired) ?? composeMailbox;
+	// Opening the agent while an email is open uses that email's account (runs only when it opens).
+	useEffect(() => {
+		if (isAgentPanelOpen && selectedEmail) setAgentMailboxId(selectedEmail.mailboxId);
+	}, [isAgentPanelOpen]);
 	useEffect(() => { setSelectedEmail(null); closeCompose(); }, [folder, searchQuery, closeCompose]);
 	useBackToClose((selectedEmail ? 1 : 0) + (isComposing ? 1 : 0), () => {
 		if (useUIStore.getState().isComposing) closeCompose();
@@ -58,5 +65,6 @@ export default function HomeRoute() {
 				{composeMailbox && !selectedEmail && !isComposing && <FloatingCompose onClick={() => startCompose()} />}
 			</main>
 		</div>
+		<AgentSheet mailboxId={agentMailbox?.id} onMailboxChange={setAgentMailboxId} />
 	</div>;
 }

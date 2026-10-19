@@ -38,6 +38,10 @@ interface UIState {
 	// Agent panel
 	isAgentPanelOpen: boolean;
 	toggleAgentPanel: () => void;
+	openAgentPanel: () => void;
+	/** Account the agent uses in All inboxes; null means the first account. */
+	agentMailboxId: string | null;
+	setAgentMailboxId: (id: string | null) => void;
 
 	// Legacy dialog support (kept for non-split views)
 	isComposeModalOpen: boolean;
@@ -54,6 +58,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 	isSidebarOpen: false,
 	isDesktopSidebarCollapsed: false,
 	isAgentPanelOpen: false,
+	agentMailboxId: null,
 
 	selectEmail: (id) => set({ selectedEmailId: id, isComposing: false }),
 
@@ -87,6 +92,8 @@ export const useUIStore = create<UIState>((set, get) => ({
 	toggleDesktopSidebar: () => set({ isDesktopSidebarCollapsed: !get().isDesktopSidebarCollapsed }),
 
 	toggleAgentPanel: () => set({ isAgentPanelOpen: !get().isAgentPanelOpen }),
+	openAgentPanel: () => set({ isAgentPanelOpen: true, isSidebarOpen: false }),
+	setAgentMailboxId: (id) => set({ agentMailboxId: id }),
 
 	openComposeModal: (options) =>
 		set({
