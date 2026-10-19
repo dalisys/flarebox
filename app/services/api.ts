@@ -116,6 +116,7 @@ export interface CatchAllStatus {
 // ---------- API client ----------
 
 type NotificationSettings = { skipForwarded: boolean; forwardTo: string | null };
+type ForwardDestinations = { available: boolean; destinations: { email: string; verified: boolean }[] };
 type AiSettings = { model: string; defaultModel: string };
 
 const api = {
@@ -124,6 +125,8 @@ const api = {
 		get<{ domains: string[]; emailAddresses: string[]; aiEnabled: boolean; sendProvider?: "resend" | "cloudflare" }>("/api/v1/config", { signal }),
 	getNotificationSettings: () => get<NotificationSettings>("/api/v1/notifications/settings"),
 	saveNotificationSettings: (settings: { skipForwarded: boolean }) => put<NotificationSettings>("/api/v1/notifications/settings", settings),
+	getForwardDestinations: () => get<ForwardDestinations>("/api/v1/forward-destinations"),
+	verifyForwardDestination: (email: string) => post<ForwardDestinations>("/api/v1/forward-destinations", { email }),
 	getAiSettings: () => get<AiSettings>("/api/v1/ai/settings"),
 	saveAiModel: (model: string | null) => put<AiSettings>("/api/v1/ai/settings", { model }),
 	getAiModels: () => get<{ id: string; name: string }[]>("/api/v1/ai/models"),

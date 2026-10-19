@@ -132,7 +132,7 @@ export default {
 			if (received.spam) return;
 			const { mailboxId, emailId } = received;
 			let forwarded = false;
-			const destination = env.FORWARD_TO_EMAIL?.trim().toLowerCase();
+			const destination = received.forwardTo || env.FORWARD_TO_EMAIL?.trim().toLowerCase();
 			if (mailboxId && destination && received.forward) {
 				const managedAddresses = (await getManagedConfig(env)).emailAddresses;
 				const destinationDomain = destination.split("@")[1];

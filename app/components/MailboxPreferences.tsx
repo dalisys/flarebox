@@ -20,6 +20,7 @@ const fieldClass = "mt-1.5 block w-full rounded-md border border-kumo-line bg-ku
 const formFromMailbox = (mailbox: Mailbox) => ({
 	displayName: mailbox.settings?.fromName || mailbox.name || "",
 	forwardIncoming: mailbox.settings?.forwardIncoming !== false,
+	forwardTo: mailbox.settings?.forwardTo || "",
 	agentEnabled: mailbox.settings?.agentEnabled !== false,
 	autoDraftEnabled: mailbox.settings?.autoDraftEnabled === true,
 	agentPrompt: mailbox.settings?.agentSystemPrompt || "",
@@ -56,7 +57,9 @@ export default function MailboxPreferences({ mailboxIdOverride, embedded = false
 	const updateMailboxMutation = useUpdateMailbox();
 	const queryClient = useQueryClient();
 	const { data: notifySettings } = useQuery({ queryKey: ["notification-settings"], queryFn: api.getNotificationSettings });
-	const forwardTo = notifySettings?.forwardTo;
+	const defaultForwardTo = notifySettings?.forwardTo;
+	const { data: forwardDestinations } = useQuery({ queryKey: ["forward-destinations"], queryFn: api.getForwardDestinations });
+	const [verifying, setVerifying] = useState(false);
 	const { data: trustedSenders = [], isError: trustedSendersError, refetch: retryTrustedSenders } = useQuery({
 		queryKey: ["trusted-senders", mailboxId],
 		queryFn: async ({ signal }) => (await api.getTrustedSenders(mailboxId!, AbortSignal.any([signal, AbortSignal.timeout(10_000)]))).senders,
@@ -97,6 +100,25 @@ export default function MailboxPreferences({ mailboxIdOverride, embedded = false
 		);
 	}
 
+	const forwardTarget = form.forwardTo.trim().toLowerCase();
+	const destination = forwardDestinations?.destinations.find((item) => item.email === forwardTarget);
+	const sendVerification = async () => {
+		setVerifying(true);
+		try {
+			queryClient.setQueryData(["forward-destinations"], await api.verifyForwardDestination(forwardTarget));
+			toastManager.add({ title: `Verification email sent to ${forwardTarget}` });
+		} catch (error) {
+			toastManager.add({ title: (error as Error).message || "Could not send verification email", variant: "error" });
+		} finally {
+			setVerifying(false);
+		}
+	};
+	const forwardStatus = !forwardTarget
+		? defaultForwardTo ? <>Empty uses the default, {defaultForwardTo}.</> : "Enter an address to forward to."
+		: !forwardDestinations?.available ? "Verify this address in Cloudflare: Email Routing → Destination addresses."
+		: destination?.verified ? "Verified. Mail can be forwarded here."
+		: <span className="flex flex-wrap items-center gap-2">{destination ? "Waiting: open the link in the email from Cloudflare." : "Not verified yet. Forwarding fails until it is."}<Button variant="secondary" size="sm" loading={verifying} onClick={() => void sendVerification()}>{destination ? "Send again" : "Send verification email"}</Button></span>;
+
 	const isDirty = JSON.stringify(form) !== JSON.stringify(formFromMailbox(mailbox));
 	const isCustomPrompt = form.agentPrompt.trim().length > 0;
 
@@ -107,6 +129,7 @@ export default function MailboxPreferences({ mailboxIdOverride, embedded = false
 			...mailbox.settings,
 			fromName: form.displayName,
 			forwardIncoming: form.forwardIncoming,
+			forwardTo: form.forwardTo.trim().toLowerCase() || undefined,
 			agentEnabled: form.agentEnabled,
 			autoDraftEnabled: form.agentEnabled && form.autoDraftEnabled,
 			agentSystemPrompt: form.agentPrompt.trim() || undefined,
@@ -141,9 +164,13 @@ export default function MailboxPreferences({ mailboxIdOverride, embedded = false
 				</Section>
 
 				<Section title="Forwarding" description="Copy incoming mail for this address to another inbox.">
-					<Row label="Forward incoming mail" description={forwardTo ? <>Sends a copy to {forwardTo}.</> : "Forwarding is not set up. Set the FORWARD_TO_EMAIL secret to forward mail."}>
-						<Switch aria-label="Forward incoming mail" checked={form.forwardIncoming} disabled={!forwardTo} onCheckedChange={(value) => set("forwardIncoming", value)} />
+					<Row label="Forward incoming mail">
+						<Switch aria-label="Forward incoming mail" checked={form.forwardIncoming} onCheckedChange={(value) => set("forwardIncoming", value)} />
 					</Row>
+					<div className="px-5 py-4">
+						<Input label="Forward to" type="email" value={form.forwardTo} placeholder={defaultForwardTo || "you@example.com"} disabled={!form.forwardIncoming} onChange={(e) => set("forwardTo", e.target.value)} />
+						<div className="mt-1.5 text-xs text-kumo-subtle">{forwardStatus}</div>
+					</div>
 				</Section>
 
 				<Section title="Signature" description="Added to new emails, replies, and forwards from this address.">

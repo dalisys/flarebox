@@ -13,6 +13,8 @@ export interface MailboxSettings {
 	fromName?: string;
 	/** Copy incoming mail to FORWARD_TO_EMAIL. Missing means on. */
 	forwardIncoming?: boolean;
+	/** Where this address forwards to. Missing means FORWARD_TO_EMAIL. */
+	forwardTo?: string;
 	signature?: SignatureSettings;
 	autoReply?: { enabled: boolean; subject: string; message: string };
 	agentSystemPrompt?: string;

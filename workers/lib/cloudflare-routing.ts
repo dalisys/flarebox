@@ -1,7 +1,8 @@
 import type { Env } from "../types";
 
 interface ApiResponse<T> { success: boolean; result: T; errors?: { message: string }[] }
-interface Zone { id: string; name: string; status: string }
+interface Zone { id: string; name: string; status: string; account: { id: string } }
+interface DestinationAddress { id: string; email: string; verified: string | null }
 interface DnsRecord { type: string; name: string; content: string; priority?: number }
 interface RoutingSettings { enabled: boolean; status?: string }
 interface RoutingRule {
@@ -162,4 +163,36 @@ export async function removeWorkerRule(env: Env, address: string): Promise<"remo
 	}
 	await cloudflare(env, `/zones/${zone.id}/email/routing/rules/${matching.id}`, { method: "DELETE" });
 	return "removed";
+}
+
+// Forwarding targets are account-level Destination addresses. Cloudflare emails each one a
+// verification link, and Worker forward() only delivers to verified ones.
+async function accountForDomain(env: Env, domain: string): Promise<string> {
+	const zone = await zoneForDomain(env, domain);
+	if (!zone) throw new Error("No active Cloudflare zone was found for this domain.");
+	return zone.account.id;
+}
+
+async function destinations(env: Env, accountId: string): Promise<DestinationAddress[]> {
+	const list: DestinationAddress[] = [];
+	for (let page = 1; ; page++) {
+		const current = await cloudflare<DestinationAddress[]>(env, `/accounts/${accountId}/email/routing/addresses?per_page=50&page=${page}`);
+		list.push(...current);
+		if (current.length < 50) return list;
+	}
+}
+
+export async function listDestinations(env: Env, domain: string) {
+	const list = await destinations(env, await accountForDomain(env, domain));
+	return list.map((address) => ({ email: address.email.toLowerCase(), verified: !!address.verified }));
+}
+
+/** Adds the address, or re-adds an unverified one so Cloudflare sends a new verification email. */
+export async function verifyDestination(env: Env, domain: string, email: string) {
+	const accountId = await accountForDomain(env, domain);
+	const existing = (await destinations(env, accountId)).find((address) => address.email.toLowerCase() === email);
+	if (existing?.verified) return listDestinations(env, domain);
+	if (existing) await cloudflare(env, `/accounts/${accountId}/email/routing/addresses/${existing.id}`, { method: "DELETE" });
+	await cloudflare(env, `/accounts/${accountId}/email/routing/addresses`, { method: "POST", body: JSON.stringify({ email }) });
+	return listDestinations(env, domain);
 }

@@ -44,6 +44,8 @@ With this token, the app can turn on Email Routing and create address rules for 
    | Zone Settings | Edit |
    | Email Routing Rules | Edit |
 
+   To verify forwarding addresses from the app, also add the **Account** permission **Email Routing Addresses → Edit**.
+
    ![Cloudflare custom token with the four required permissions and All zones selected](images/cloudflare-routing-token.png)
 
 3. Under **Zone Resources**, pick **Include → Specific zone** for each domain.

@@ -29,7 +29,7 @@ import { canTrustedSenderOverride, classifySpam, hasAlignedEnvelope, isAuthentic
 import { writeEmail } from "./lib/ai";
 import { scanWithRspamd, type RspamdAction } from "./lib/rspamd";
 import { addManagedAddress, addManagedDomain, clearMailboxOperation, getMailboxOperation, getManagedConfig, isRetiredAddress, removeManagedDomain, retireManagedAddress, saveMailboxOperation } from "./lib/managed-config";
-import { disableCatchAll, enableRouting, ensureWorkerRule, inspectCatchAll, inspectRouting, inspectWorkerRules, removeWorkerRule } from "./lib/cloudflare-routing";
+import { disableCatchAll, enableRouting, ensureWorkerRule, inspectCatchAll, inspectRouting, inspectWorkerRules, listDestinations, removeWorkerRule, verifyDestination } from "./lib/cloudflare-routing";
 import { mailboxArchive } from "./lib/mailbox-export";
 import { getNotifySettings, getVapidKeys, isPushEndpoint, removeSubscription, saveNotifySettings, saveSubscription } from "./lib/push";
 import { defaultModel, getModelId, MODEL_ID_PATTERN, saveModelId } from "./lib/model";
@@ -228,6 +228,25 @@ app.post("/api/v1/domains/:domain/catch-all/disable", async (c) => {
 	const domain = c.req.param("domain").toLowerCase();
 	if (!(await getManagedConfig(c.env)).domains.includes(domain)) return c.json({ error: "Domain not found" }, 404);
 	try { return c.json(await disableCatchAll(c.env, domain)); }
+	catch (error) { return c.json({ error: (error as Error).message }, 502); }
+});
+
+// Forwarding destinations live on the Cloudflare account; any managed domain finds it.
+app.get("/api/v1/forward-destinations", async (c) => {
+	const domain = (await getManagedConfig(c.env)).domains[0];
+	if (!c.env.CLOUDFLARE_API_TOKEN || !domain) return c.json({ available: false, destinations: [] });
+	try { return c.json({ available: true, destinations: await listDestinations(c.env, domain) }); }
+	catch (error) { return c.json({ error: (error as Error).message }, 502); }
+});
+
+app.post("/api/v1/forward-destinations", async (c) => {
+	const parsed = z.object({ email: z.string().trim().toLowerCase().email() }).safeParse(await c.req.json().catch(() => null));
+	if (!parsed.success) return c.json({ error: "Enter a valid email address" }, 400);
+	const { email } = parsed.data;
+	const config = await getManagedConfig(c.env);
+	if (config.emailAddresses.includes(email) || config.domains.includes(email.split("@")[1])) return c.json({ error: "Forward to an address outside this app. Otherwise mail loops." }, 400);
+	if (!c.env.CLOUDFLARE_API_TOKEN || !config.domains[0]) return c.json({ error: "Add a Cloudflare API token to verify addresses here." }, 400);
+	try { return c.json({ available: true, destinations: await verifyDestination(c.env, config.domains[0], email) }); }
 	catch (error) { return c.json({ error: (error as Error).message }, 502); }
 });
 
@@ -774,7 +793,7 @@ async function streamToArrayBuffer(stream: ReadableStream, streamSize: number) {
 	return result;
 }
 
-async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: string; from?: string }, env: Env, ctx: ExecutionContext): Promise<{ mailboxId: string; emailId: string; spam: boolean; forward: boolean; sender: string; subject: string } | undefined> {
+async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: string; from?: string }, env: Env, ctx: ExecutionContext): Promise<{ mailboxId: string; emailId: string; spam: boolean; forward: boolean; forwardTo?: string; sender: string; subject: string } | undefined> {
 	const rawEmail = await streamToArrayBuffer(event.raw, event.rawSize);
 	const parsedEmail = await new PostalMime().parse(rawEmail);
 
@@ -803,7 +822,7 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: 
 	const messageId = crypto.randomUUID();
 	const mailboxSettingsObject = await env.BUCKET.get(`mailboxes/${mailboxId}.json`);
 	if (!mailboxSettingsObject) { console.log(`Ignoring email for ${mailboxId}: mailbox does not exist`); return; }
-	const settings = await mailboxSettingsObject.json<{ forwardIncoming?: boolean; agentEnabled?: boolean; autoDraftEnabled?: boolean; spamFiltering?: SpamSettings; fromName?: string; signature?: { enabled?: boolean; text?: string }; autoReply?: { enabled?: boolean; subject?: string; message?: string } }>();
+	const settings = await mailboxSettingsObject.json<{ forwardIncoming?: boolean; forwardTo?: string; agentEnabled?: boolean; autoDraftEnabled?: boolean; spamFiltering?: SpamSettings; fromName?: string; signature?: { enabled?: boolean; text?: string }; autoReply?: { enabled?: boolean; subject?: string; message?: string } }>();
 	const stub = env.MAILBOX.get(env.MAILBOX.idFromName(mailboxId));
 	const domain = senderDomain(parsedEmail.from?.address || "");
 	const blockedDomain = !!(domain && await env.BUCKET.head(domainBlockKey(domain)));
@@ -940,7 +959,7 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: 
 		})().catch((e) => console.error("Auto-reply failed:", (e as Error).message)));
 	}
 	// The push notification is sent by the email handler after forwarding, which may skip it.
-	return { mailboxId, emailId: messageId, spam: classification.spam, forward: settings.forwardIncoming !== false, sender: parsedEmail.from?.name || sender, subject: parsedEmail.subject || "" };
+	return { mailboxId, emailId: messageId, spam: classification.spam, forward: settings.forwardIncoming !== false, forwardTo: settings.forwardTo?.trim().toLowerCase() || undefined, sender: parsedEmail.from?.name || sender, subject: parsedEmail.subject || "" };
 }
 
 export { app, receiveEmail };

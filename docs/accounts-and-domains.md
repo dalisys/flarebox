@@ -133,21 +133,26 @@ To receive every address on a domain in one mailbox:
 
 Copy incoming non-junk mail to another address. Mail also stays in Flarebox.
 
-1. In Cloudflare, add and verify the address in **Email Routing → Destination Addresses**.
-2. Save it as a secret:
+Set it for each address in **Settings → Forwarding**:
 
-   ```bash
-   npx wrangler secret put FORWARD_TO_EMAIL --name flarebox
-   ```
+1. Type the address in **Forward to**.
+2. Select **Send verification email**. Cloudflare emails that address a link.
+3. Open the link. The setting then shows **Verified**.
+4. Save. Send a test message and check both inboxes.
 
-3. Send a test message. Check both inboxes.
+The verify button needs the [API token](setup.md#3-cloudflare-api-token-optional) with **Email Routing Addresses → Edit**. Without it, verify the address in Cloudflare: **Email Routing → Destination Addresses**.
 
-- Forwarding applies to every mailbox, including catch-all mailboxes.
+To use one default for all addresses, save it as a secret. An empty **Forward to** box uses it.
+
+```bash
+npx wrangler secret put FORWARD_TO_EMAIL --name flarebox
+```
+
+- Turn **Forward incoming mail** off to stop forwarding for one address.
 - Junk mail is not forwarded.
 - Forwarded mail sends no push notification, since you get it at the other address. Change this in **Settings → Notifications → Skip forwarded mail** (on by default).
-- Do not forward to an address that routes back into this Worker. That makes a loop.
-- If forwarding fails, the Worker logs an error. The inbox copy is still saved.
-- To stop, delete the `FORWARD_TO_EMAIL` secret.
+- You cannot forward to an address that routes back into this Worker. That makes a loop.
+- If forwarding fails (for example, the address is not verified), the Worker logs an error. The inbox copy is still saved.
 
 ## Signature and automatic reply
 
