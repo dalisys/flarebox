@@ -52,6 +52,6 @@ export function toFilterMessage(input: { sender?: string | null; recipient?: str
 		from: input.sender || "",
 		to: input.recipient || "",
 		subject: input.subject || "",
-		body: (input.body || "").slice(0, 200_000).replace(/<[^>]*>/g, " "),
+		body: (input.body || "").slice(0, 200_000).replace(/<[^<>]*>/g, " "),
 	};
 }

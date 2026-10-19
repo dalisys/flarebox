@@ -53,3 +53,10 @@ test("body matching ignores HTML tags", async () => {
 	assert.equal(ruleMatches(rule({ body: "pay  now" }), msg), true);
 	assert.equal(ruleMatches(rule({ body: "<b>" }), msg), false);
 });
+
+test("tag stripping stays fast on unclosed tags", async () => {
+	const { toFilterMessage } = await import("../workers/lib/filters.ts");
+	const start = performance.now();
+	toFilterMessage({ body: "<".repeat(200_000) });
+	assert.ok(performance.now() - start < 500);
+});
