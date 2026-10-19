@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { canTrustedSenderOverride, isAuthenticatedSender, senderDomain, domainBlockKey } from "../workers/lib/spam.ts";
+import { canTrustedSenderOverride, hasAlignedEnvelope, isAuthenticatedSender, senderDomain, domainBlockKey } from "../workers/lib/spam.ts";
 
 test("trusted senders can bypass ordinary spam actions", () => {
 	for (const action of [undefined, "greylist", "add header", "rewrite subject"]) {
@@ -40,4 +40,12 @@ test("trusted sender override needs an aligned envelope and a DMARC pass from Rs
 	assert.equal(isAuthenticatedSender({ ...ok, rspamdSymbols: undefined }), false);
 	// A sender-written Authentication-Results header is never trusted.
 	assert.equal(isAuthenticatedSender({ ...ok, rspamdSymbols: undefined, headers: [{ key: "authentication-results", value: "mx.cloudflare.net; dmarc=pass header.from=example.com" }] }), false);
+});
+
+test("threading needs the From domain to match the envelope domain", () => {
+	assert.equal(hasAlignedEnvelope("sam@example.com", "bounce@example.com"), true);
+	assert.equal(hasAlignedEnvelope("sam@example.com", "bounce@mail.example.com"), true);
+	assert.equal(hasAlignedEnvelope("sam@example.com", "attacker@evil.test"), false);
+	assert.equal(hasAlignedEnvelope("sam@example.com", undefined), false);
+	assert.equal(hasAlignedEnvelope("", "bounce@example.com"), false);
 });

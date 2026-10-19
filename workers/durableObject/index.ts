@@ -776,12 +776,13 @@ export class MailboxDO extends DurableObject<Env> {
 	 */
 	async canJoinThread(threadId: string, address: string): Promise<boolean> {
 		const value = address.toLowerCase().trim();
+		// Exact token match (instr, not LIKE) so "%" or "_" in an address cannot act as a wildcard.
 		const rows = [...this.ctx.storage.sql.exec(
 			`SELECT
 				COUNT(*) AS total,
 				SUM(CASE WHEN LOWER(sender) = ?
-					OR (', ' || LOWER(COALESCE(recipient, '')) || ',') LIKE '%, ' || ? || ',%'
-					OR (', ' || LOWER(COALESCE(cc, '')) || ',') LIKE '%, ' || ? || ',%'
+					OR instr(', ' || LOWER(COALESCE(recipient, '')) || ',', ', ' || ? || ',') > 0
+					OR instr(', ' || LOWER(COALESCE(cc, '')) || ',', ', ' || ? || ',') > 0
 				THEN 1 ELSE 0 END) AS matches
 			 FROM emails WHERE thread_id = ?`,
 			value, value, value, threadId,

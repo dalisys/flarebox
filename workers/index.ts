@@ -20,7 +20,7 @@ import { handleReplyEmail, handleForwardEmail } from "./routes/reply-forward";
 import { Folders } from "../shared/folders";
 import type { Env } from "./types";
 import { requireMailbox, type MailboxContext } from "./lib/mailbox";
-import { canTrustedSenderOverride, classifySpam, isAuthenticatedSender, senderDomain, domainBlockKey, type SpamSettings } from "./lib/spam";
+import { canTrustedSenderOverride, classifySpam, hasAlignedEnvelope, isAuthenticatedSender, senderDomain, domainBlockKey, type SpamSettings } from "./lib/spam";
 import { writeEmail } from "./lib/ai";
 import { scanWithRspamd, type RspamdAction } from "./lib/rspamd";
 import { addManagedAddress, addManagedDomain, clearMailboxOperation, getMailboxOperation, getManagedConfig, isRetiredAddress, removeManagedDomain, retireManagedAddress, saveMailboxOperation } from "./lib/managed-config";
@@ -727,10 +727,14 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: 
 	const inReplyTo = parsedEmail.inReplyTo ? extractMsgId(parsedEmail.inReplyTo) : null;
 	const emailReferences = parsedEmail.references ? parsedEmail.references.split(/\s+/).filter(Boolean).map(extractMsgId) : [];
 	let threadId = emailReferences[0] || inReplyTo || messageId;
-	// Reply headers come from the sender: only join a conversation they are already part of.
-	if (threadId !== messageId && !(await stub.canJoinThread(threadId, parsedEmail.from?.address || ""))) threadId = messageId;
+	// Reply headers and From come from the sender. Only join a conversation when the From
+	// domain matches the delivering envelope, it is not this mailbox's own address, and the
+	// sender is already part of that conversation.
+	const fromAddress = (parsedEmail.from?.address || "").toLowerCase().trim();
+	const mayJoinThread = fromAddress !== mailboxId.toLowerCase() && hasAlignedEnvelope(fromAddress, event.from);
+	if (threadId !== messageId && !(mayJoinThread && await stub.canJoinThread(threadId, fromAddress))) threadId = messageId;
 
-	if (!inReplyTo && emailReferences.length === 0) {
+	if (mayJoinThread && !inReplyTo && emailReferences.length === 0) {
 		const subjectThread = await (stub as any).findThreadBySubject(parsedEmail.subject || "", parsedEmail.from?.address || undefined);
 		if (subjectThread) threadId = subjectThread;
 	}

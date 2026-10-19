@@ -29,6 +29,12 @@ export function isAuthenticatedSender(input: { headerFrom?: string; envelopeFrom
 	return !!from && aligned(domainOf(input.envelopeFrom), from) && !!input.rspamdSymbols?.includes("DMARC_POLICY_ALLOW");
 }
 
+/** Weaker check for threading: the header From domain matches the envelope MAIL FROM domain. */
+export function hasAlignedEnvelope(headerFrom?: string, envelopeFrom?: string): boolean {
+	const from = domainOf(headerFrom);
+	return !!from && aligned(domainOf(envelopeFrom), from);
+}
+
 interface IncomingMessage {
 	from?: { address?: string };
 	replyTo?: { address?: string }[];
