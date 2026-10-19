@@ -125,13 +125,16 @@ Open the account, then **Settings**.
 - **Signature**: turn on **Add signature** and write the text. It is added to new emails, replies, and forwards from this address. Drafts keep the signature they already have.
 - **Automatic reply**: turn on **Send automatic reply** and write a message. The subject is optional. Empty means `Re: <original subject>`. The signature is added below the message.
 
+The automatic reply needs [Rspamd](spam-filtering.md#rspamd). It is sent only when Rspamd says DMARC passed for the sender. This stops replies to forged senders.
+
 The automatic reply is not sent:
 
 - to mail in Junk,
 - to addresses on your own domains,
 - to `noreply`, `mailer-daemon`, `postmaster`, and bounce addresses,
 - to mail with `Auto-Submitted`, `List-Id`, `List-Unsubscribe`, or `Precedence: bulk/list/junk` headers,
-- to the same sender more than one time in 4 days.
+- to the same sender more than one time in 4 days,
+- more than 5 times per hour for one account.
 
 The reply has the `Auto-Submitted: auto-replied` header, so other auto-responders do not answer it. A copy goes to **Sent**. It counts toward the send limit (20 per hour). If sending fails, the Worker logs an error. The received email is still saved.
 

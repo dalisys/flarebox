@@ -5,6 +5,9 @@
 /** Reply to the same sender at most once in this window. */
 export const AUTO_REPLY_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
 
+/** Automatic replies per mailbox per hour, so outside senders cannot use up the owner's send limit (20 per hour). */
+export const AUTO_REPLY_HOURLY_CAP = 5;
+
 const ROBOT_SENDER = /^(no-?reply|do-?not-?reply|mailer-daemon|postmaster|bounces?|notifications?)([+._-]|@)/i;
 
 /**

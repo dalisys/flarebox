@@ -16,7 +16,7 @@ import {
 	listMailboxes,
 	textToHtml,
 } from "./lib/email-helpers";
-import { shouldAutoReply } from "./lib/auto-reply";
+import { AUTO_REPLY_HOURLY_CAP, AUTO_REPLY_WINDOW_MS, shouldAutoReply } from "./lib/auto-reply";
 import { replySubject } from "./lib/auto-draft";
 import { SendEmailRequestSchema } from "./lib/schemas";
 import { handleReplyEmail, handleForwardEmail } from "./routes/reply-forward";
@@ -762,13 +762,14 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: 
 	if (!classification.spam && autoReply?.enabled && autoReply.message?.trim() && sender) {
 		// Runs in the background and never throws: a throw here would make Cloudflare retry and store the email twice.
 		ctx.waitUntil((async () => {
+			// Reply only when DMARC proves the From address is real, so forged senders get nothing.
+			if (!isAuthenticatedSender({ headerFrom: sender, envelopeFrom: event.from, rspamdSymbols })) return;
 			const now = Date.now();
 			const lastRepliedAt = await stub.getAutoReplyTime(sender);
 			if (!shouldAutoReply({ sender, envelopeFrom: event.from, headers: parsedEmail.headers, managedDomains: managedConfig.domains, lastRepliedAt, now })) return;
 			const rateLimitError = await (stub as any).checkSendRateLimit();
 			if (rateLimitError) { console.warn("Auto-reply skipped:", rateLimitError); return; }
-			// ponytail: read-then-write, two emails at the same moment can both get a reply; make it one DO call if that matters.
-			await stub.setAutoReplyTime(sender, now);
+			if (!(await stub.claimAutoReply(sender, now, AUTO_REPLY_WINDOW_MS, AUTO_REPLY_HOURLY_CAP))) return;
 			const signature = settings.signature?.enabled && settings.signature.text?.trim() ? `\n\n-- \n${settings.signature.text.trim()}` : "";
 			const text = `${autoReply.message!.trim()}${signature}`;
 			const html = textToHtml(text);
