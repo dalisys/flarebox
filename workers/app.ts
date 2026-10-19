@@ -10,6 +10,7 @@ import { app as apiApp, receiveEmail } from "./index";
 import { EmailMCP } from "./mcp";
 import type { Env } from "./types";
 import { getManagedConfig } from "./lib/managed-config";
+import { isCrossSiteWrite } from "./lib/csrf";
 
 export { MailboxDO } from "./durableObject";
 export { EmailAgent } from "./agent";
@@ -78,6 +79,11 @@ app.use("*", async (c, next) => {
 
 	// Authorization model note: once a teammate passes the shared Cloudflare
 	// Access policy, they can access all mailboxes in this app by design.
+	return next();
+});
+
+app.use("*", async (c, next) => {
+	if (isCrossSiteWrite(c.req.raw)) return c.text("Cross-site request blocked", 403);
 	return next();
 });
 
