@@ -182,6 +182,8 @@ function MessageBubble({
 									<Markdown
 										remarkPlugins={[remarkGfm]}
 										components={{
+											// Never load images from AI output: a prompt-injected URL could carry mail data out.
+											img: ({ alt }) => <span>{alt ? `[image: ${alt}]` : "[image]"}</span>,
 											a: ({ href, children }) => (
 												<a
 													href={href}

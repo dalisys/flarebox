@@ -769,6 +769,26 @@ export class MailboxDO extends DurableObject<Env> {
 
 	// ── Threading helpers (raw SQL) ────────────────────────────────
 
+	/**
+	 * True when the thread has no messages yet, or the address already sent,
+	 * received, or was copied on one of them. Reply headers are set by the
+	 * sender, so a stranger must not join someone else's conversation.
+	 */
+	async canJoinThread(threadId: string, address: string): Promise<boolean> {
+		const value = address.toLowerCase().trim();
+		const rows = [...this.ctx.storage.sql.exec(
+			`SELECT
+				COUNT(*) AS total,
+				SUM(CASE WHEN LOWER(sender) = ?
+					OR (', ' || LOWER(COALESCE(recipient, '')) || ',') LIKE '%, ' || ? || ',%'
+					OR (', ' || LOWER(COALESCE(cc, '')) || ',') LIKE '%, ' || ? || ',%'
+				THEN 1 ELSE 0 END) AS matches
+			 FROM emails WHERE thread_id = ?`,
+			value, value, value, threadId,
+		)][0] as { total: number; matches: number | null } | undefined;
+		return !rows?.total || Boolean(value && rows.matches);
+	}
+
 	async findThreadBySubject(subject: string, senderAddress?: string): Promise<string | null> {
 		const normalized = subject
 			.replace(/^(?:(?:re|fwd?|fw|aw|wg|r[eé]f|sv)\s*:\s*)+/i, "")

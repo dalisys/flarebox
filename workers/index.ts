@@ -727,6 +727,8 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: 
 	const inReplyTo = parsedEmail.inReplyTo ? extractMsgId(parsedEmail.inReplyTo) : null;
 	const emailReferences = parsedEmail.references ? parsedEmail.references.split(/\s+/).filter(Boolean).map(extractMsgId) : [];
 	let threadId = emailReferences[0] || inReplyTo || messageId;
+	// Reply headers come from the sender: only join a conversation they are already part of.
+	if (threadId !== messageId && !(await stub.canJoinThread(threadId, parsedEmail.from?.address || ""))) threadId = messageId;
 
 	if (!inReplyTo && emailReferences.length === 0) {
 		const subjectThread = await (stub as any).findThreadBySubject(parsedEmail.subject || "", parsedEmail.from?.address || undefined);
