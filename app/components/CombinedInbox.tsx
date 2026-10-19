@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import SenderAvatar, { senderName } from "~/components/SenderAvatar";
 import EmailStarButton from "~/components/EmailStarButton";
+import { AccountColorDot } from "~/components/AccountMarks";
 import { buildSearchQuery, parseSearchQuery, searchQueryParams } from "~/lib/search-parser";
 import { formatListDate, formatSnoozeDate } from "shared/dates";
 import { canSnooze, snoozePresets } from "shared/schedule-time";
@@ -167,7 +168,7 @@ export default function CombinedInbox({ mailboxes, folder, onSelect }: { mailbox
 							<span className="flex min-w-0 items-center gap-2"><span className="mail-message-sender truncate">{senderName(sender)}</span>{(email.thread_count ?? 1) > 1 && <span className="text-xs text-kumo-subtle">{email.thread_count}</span>}<span className="mail-message-date ml-auto shrink-0">{email.folder_id === Folders.SCHEDULED && email.send_at ? <>{email.send_error && <span className="mr-1 font-medium text-kumo-danger" title={email.send_error}>Failed ·</span>}Sends {formatSnoozeDate(email.send_at)}</> : email.folder_id === Folders.SNOOZED && email.snoozed_until ? `Until ${formatSnoozeDate(email.snoozed_until)}` : formatListDate(email.date)}</span></span>
 							<span className="mail-message-subject block truncate">{email.subject || "(no subject)"}</span>
 							<span className="mail-message-snippet block truncate">{getSnippetText(email.snippet)}</span>
-							<span className="mail-message-account block truncate">{email.mailboxId}{(folder === "activity" || searching) ? ` · ${getFolderDisplayName(emailFolder)}` : ""}</span>
+							<span className="mail-message-account flex min-w-0 items-center gap-1.5"><AccountColorDot email={email.mailboxId} /><span className="truncate">{email.mailboxId}{(folder === "activity" || searching) ? ` · ${getFolderDisplayName(emailFolder)}` : ""}</span></span>
 						</span>
 					</button>
 					<EmailStarButton mailboxId={email.mailboxId} id={email.id} starred={email.starred} />

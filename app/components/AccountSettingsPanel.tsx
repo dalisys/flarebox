@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import MailboxPreferences from "~/components/MailboxPreferences";
 import MailImportPanel from "~/components/MailImportPanel";
+import { RoutingDot } from "~/components/AccountMarks";
+import { useAddressStatus } from "~/queries/mailboxes";
 import api from "~/services/api";
 import type { Mailbox } from "~/types";
 
@@ -28,6 +30,8 @@ export default function AccountSettingsPanel({ mailbox, mailboxes, domains, onCh
 	const [error, setError] = useState<string | null>(null);
 	const [feedback, setFeedback] = useState<string | null>(null);
 	const currentAction = lockedAction ?? action;
+	const domain = mailbox.email.split("@")[1];
+	const routingStatus = useAddressStatus()(mailbox.email);
 
 	useEffect(() => {
 		if (mailbox.operation?.mode === "move") setTarget(mailbox.operation.target);
@@ -114,7 +118,7 @@ export default function AccountSettingsPanel({ mailbox, mailboxes, domains, onCh
 		<div className="border-b border-kumo-line pb-6">
 			<div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-kumo-subtle"><EnvelopeSimpleIcon size={15} /> Account</div>
 			<h2 className="break-all text-2xl font-semibold tracking-tight text-kumo-default md:text-3xl">{mailbox.email}</h2>
-			<p className="mt-2 text-sm text-kumo-subtle">{mailbox.retired ? "Mail delivery stopped · Finish the transfer below" : `Active address on ${mailbox.email.split("@")[1]}`}</p>
+			{mailbox.retired ? <p className="mt-2 text-sm text-kumo-subtle">Mail delivery stopped · Finish the transfer below</p> : <><p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-kumo-subtle">Active address on {domain} {routingStatus !== "unknown" && <RoutingDot status={routingStatus} withLabel />}</p>{routingStatus === "inactive" && <p className="mt-2 text-sm text-kumo-subtle">Mail to this address can’t arrive until its routing rule is set up. <Link className="font-medium text-kumo-default underline" to={`/settings?section=addresses&domain=${encodeURIComponent(domain)}`}>Set up routing</Link></p>}</>}
 			{!mailbox.retired && <Link className="mt-4 inline-flex items-center gap-1 rounded-md border border-kumo-line px-3 py-1.5 text-sm text-kumo-default hover:bg-kumo-tint" to={`/mailbox/${encodeURIComponent(mailbox.id)}/emails/inbox`}>Open inbox <ArrowRightIcon size={15} /></Link>}
 		</div>
 

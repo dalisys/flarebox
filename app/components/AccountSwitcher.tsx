@@ -5,7 +5,9 @@ import { useNavigate, useParams } from "react-router";
 import SenderAvatar from "~/components/SenderAvatar";
 import ThemeToggle from "~/components/ThemeToggle";
 import { useUIStore } from "~/hooks/useUIStore";
-import { useMailboxes } from "~/queries/mailboxes";
+import { useAddressStatus, useMailboxes } from "~/queries/mailboxes";
+import { AccountLabel, RoutingDot } from "~/components/AccountMarks";
+import type { Mailbox } from "~/types";
 
 export default function AccountSwitcher() {
 	const { mailboxId } = useParams<{ mailboxId: string }>();
@@ -14,6 +16,7 @@ export default function AccountSwitcher() {
 	const gesture = useRef<{ pointerId: number; x: number; y: number; started: number } | null>(null);
 	const suppressClickUntil = useRef(0);
 	const navigate = useNavigate();
+	const addressStatus = useAddressStatus();
 	const account = mailboxes.find((item) => item.id === mailboxId) ?? mailboxes.find((item) => !item.retired) ?? mailboxes[0];
 	const go = (url: string) => {
 		setOpen(false);
@@ -27,6 +30,15 @@ export default function AccountSwitcher() {
 		const index = accounts.findIndex((item) => item.id === account?.id);
 		const next = accounts[((index < 0 ? 0 : index) + direction + accounts.length) % accounts.length];
 		go(`/mailbox/${encodeURIComponent(next.id)}/emails/inbox`);
+	};
+	const accountRow = (item: Mailbox) => {
+		const status = addressStatus(item.email);
+		return <div key={item.id} className={`mail-account-row ${mailboxId === item.id ? "is-active" : ""}`} style={{ padding: 0 }}>
+			<button type="button" className="flex min-w-0 flex-1 items-center gap-4 self-stretch py-3 pl-4 text-left" aria-current={mailboxId === item.id ? "true" : undefined} onClick={() => go(`/mailbox/${encodeURIComponent(item.id)}/emails/inbox`)}>
+				<SenderAvatar sender={item.email} /><span className="flex min-w-0 flex-1 text-sm font-medium"><AccountLabel email={item.email} /></span>{mailboxId === item.id && <span className="mail-account-current">Selected</span>}
+			</button>
+			{!item.retired && <span className="flex shrink-0 pr-4">{status === "inactive" ? <button type="button" className="p-1" onClick={() => go(`/settings?section=addresses&domain=${encodeURIComponent(item.email.split("@")[1])}`)} aria-label={`Set up receiving for ${item.email}`}><RoutingDot status={status} withLabel /></button> : <RoutingDot status={status} />}</span>}
+		</div>;
 	};
 	return <>
 		<button
@@ -76,9 +88,8 @@ export default function AccountSwitcher() {
 					<button type="button" className={`mail-account-row ${!mailboxId ? "is-active" : ""}`} onClick={() => go("/")}><EnvelopeSimpleIcon size={24} /><span>All inboxes</span>{!mailboxId && <span className="mail-account-current">Selected</span>}</button>
 					{isPending && <p className="p-4 text-sm text-kumo-subtle">Loading accounts…</p>}
 					{isError && <button type="button" className="mail-account-row" onClick={() => refetch()}>Could not load accounts. Try again</button>}
-					{mailboxes.map((item) => <button key={item.id} type="button" className={`mail-account-row ${mailboxId === item.id ? "is-active" : ""}`} aria-current={mailboxId === item.id ? "true" : undefined} onClick={() => go(`/mailbox/${encodeURIComponent(item.id)}/emails/inbox`)}>
-						<SenderAvatar sender={item.email} /><span className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-medium">{item.name || item.email}</span><span className="block truncate text-xs text-kumo-subtle">{item.email}</span>{item.retired && <span className="text-xs text-kumo-subtle">Retired</span>}</span>{mailboxId === item.id && <span className="mail-account-current">Selected</span>}
-					</button>)}
+					{mailboxes.filter((item) => !item.retired).map(accountRow)}
+					{mailboxes.some((item) => item.retired) && <><p className="px-4 pb-1 pt-3 text-xs font-medium text-kumo-subtle">Retired</p>{mailboxes.filter((item) => item.retired).map(accountRow)}</>}
 				</div>
 				<div className="mail-account-footer">
 					<button type="button" className="mail-account-row" onClick={() => go("/settings?section=accounts&account=new")}><PlusIcon size={24} /><span>Add another account</span></button>

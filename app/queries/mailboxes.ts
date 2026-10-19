@@ -2,7 +2,7 @@
 // Licensed under the Apache 2.0 license found in the LICENSE file or at:
 //     https://opensource.org/licenses/Apache-2.0
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "~/services/api";
 import type { Mailbox } from "~/types";
 import { queryKeys } from "./keys";
@@ -57,4 +57,24 @@ export function useUpdateMailbox() {
 			qc.invalidateQueries({ queryKey: queryKeys.mailboxes.all });
 		},
 	});
+}
+
+export type AddressStatus = "active" | "inactive" | "unknown";
+
+// Whether each address has a live Email Routing rule. "unknown" while loading or without a Cloudflare token.
+export function useAddressStatus(): (email: string) => AddressStatus {
+	const { data: mailboxes = [] } = useMailboxes();
+	const domains = [...new Set(mailboxes.map((mailbox) => mailbox.email.split("@")[1]))];
+	const results = useQueries({ queries: domains.map((domain) => ({
+		queryKey: queryKeys.addressStatus(domain),
+		queryFn: () => api.getDomainRules(domain),
+		staleTime: 5 * 60_000,
+		retry: false,
+	})) });
+	const statuses = new Map<string, AddressStatus>();
+	for (const result of results) {
+		if (!result.data?.available) continue;
+		for (const [address, status] of Object.entries(result.data.addresses)) statuses.set(address, status);
+	}
+	return (email) => statuses.get(email.toLowerCase()) ?? "unknown";
 }

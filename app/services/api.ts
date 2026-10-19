@@ -131,7 +131,8 @@ const api = {
 	removeDomain: (domain: string) => del<void>(`/api/v1/domains/${encodeURIComponent(domain)}`),
 	getDomainRouting: (domain: string) => get<RoutingStatus>(`/api/v1/domains/${encodeURIComponent(domain)}/routing`),
 	enableDomainRouting: (domain: string) => post<RoutingStatus>(`/api/v1/domains/${encodeURIComponent(domain)}/routing`),
-	syncDomainRules: (domain: string) => post<{ results: { address: string; routing: "active" | "manual" }[] }>(`/api/v1/domains/${encodeURIComponent(domain)}/rules`),
+	getDomainRules: (domain: string) => get<{ available: boolean; addresses: Record<string, "active" | "inactive"> }>(`/api/v1/domains/${encodeURIComponent(domain)}/rules`),
+	syncDomainRules:(domain: string) => post<{ results: { address: string; routing: "active" | "manual" }[] }>(`/api/v1/domains/${encodeURIComponent(domain)}/rules`),
 	getCatchAll: (domain: string) => get<CatchAllStatus>(`/api/v1/domains/${encodeURIComponent(domain)}/catch-all`),
 	disableCatchAll: (domain: string) => post<CatchAllStatus>(`/api/v1/domains/${encodeURIComponent(domain)}/catch-all/disable`),
 

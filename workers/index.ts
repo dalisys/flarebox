@@ -29,7 +29,7 @@ import { canTrustedSenderOverride, classifySpam, hasAlignedEnvelope, isAuthentic
 import { writeEmail } from "./lib/ai";
 import { scanWithRspamd, type RspamdAction } from "./lib/rspamd";
 import { addManagedAddress, addManagedDomain, clearMailboxOperation, getMailboxOperation, getManagedConfig, isRetiredAddress, removeManagedDomain, retireManagedAddress, saveMailboxOperation } from "./lib/managed-config";
-import { disableCatchAll, enableRouting, ensureWorkerRule, inspectCatchAll, inspectRouting, removeWorkerRule } from "./lib/cloudflare-routing";
+import { disableCatchAll, enableRouting, ensureWorkerRule, inspectCatchAll, inspectRouting, inspectWorkerRules, removeWorkerRule } from "./lib/cloudflare-routing";
 import { mailboxArchive } from "./lib/mailbox-export";
 import { getNotifySettings, getVapidKeys, isPushEndpoint, removeSubscription, saveNotifySettings, saveSubscription } from "./lib/push";
 import { defaultModel, getModelId, MODEL_ID_PATTERN, saveModelId } from "./lib/model";
@@ -205,6 +205,16 @@ app.post("/api/v1/domains/:domain/rules", async (c) => {
 		}
 		return c.json({ results });
 	} catch (error) { return c.json({ error: (error as Error).message }, 502); }
+});
+
+app.get("/api/v1/domains/:domain/rules", async (c) => {
+	const domain = c.req.param("domain").toLowerCase();
+	const config = await getManagedConfig(c.env);
+	if (!config.domains.includes(domain)) return c.json({ error: "Domain not found" }, 404);
+	const addresses = config.emailAddresses.filter((address) => address.endsWith(`@${domain}`));
+	if (!c.env.CLOUDFLARE_API_TOKEN) return c.json({ available: false, addresses: {} });
+	try { return c.json({ available: true, addresses: await inspectWorkerRules(c.env, domain, addresses) }); }
+	catch (error) { return c.json({ error: (error as Error).message }, 502); }
 });
 
 app.get("/api/v1/domains/:domain/catch-all", async (c) => {

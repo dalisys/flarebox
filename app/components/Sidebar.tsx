@@ -13,12 +13,13 @@ import { useQueries } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { Folders } from "shared/folders";
 import { useCreateFolder, useFolders } from "~/queries/folders";
-import { useAiEnabled, useMailboxes } from "~/queries/mailboxes";
+import { useAddressStatus, useAiEnabled, useMailboxes, type AddressStatus } from "~/queries/mailboxes";
 import { useUIStore } from "~/hooks/useUIStore";
 import { queryKeys } from "~/queries/keys";
 import api from "~/services/api";
 import type { Folder, Mailbox } from "~/types";
 import ThemeToggle from "~/components/ThemeToggle";
+import { AccountColorDot, AccountLabel, RoutingDot } from "~/components/AccountMarks";
 
 const primaryFolders = [
 	{ id: Folders.INBOX, label: "Inbox", icon: TrayIcon },
@@ -50,7 +51,8 @@ function FolderItem({ to, label, icon: Icon, count, inset = false }: {
 	</Link>;
 }
 
-function AccountGroup({ mailbox, initiallyOpen, loadFolders }: { mailbox: Mailbox; initiallyOpen: boolean; loadFolders: boolean }) {
+function AccountGroup({ mailbox, initiallyOpen, loadFolders, status }: { mailbox: Mailbox; initiallyOpen: boolean; loadFolders: boolean; status: AddressStatus }) {
+	const { closeSidebar } = useUIStore();
 	const [open, setOpen] = useState(initiallyOpen);
 	const [isCreateOpen, setIsCreateOpen] = useState(false);
 	const [newFolder, setNewFolder] = useState("");
@@ -59,11 +61,14 @@ function AccountGroup({ mailbox, initiallyOpen, loadFolders }: { mailbox: Mailbo
 	useEffect(() => { if (initiallyOpen) setOpen(true); }, [initiallyOpen]);
 	const base = `/mailbox/${encodeURIComponent(mailbox.id)}`;
 	return <div className="mt-1">
-		<button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}
-			className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-semibold text-kumo-default hover:bg-kumo-tint">
-			{open ? <CaretDownIcon size={14} /> : <CaretRightIcon size={14} />}
-			<span className="min-w-0 flex-1 truncate" title={mailbox.email}>{mailbox.email}</span>{mailbox.retired && <span className="text-[10px] font-normal text-kumo-subtle">Retired</span>}
-		</button>
+		<div className="flex items-center gap-1 rounded-md pr-2 hover:bg-kumo-tint">
+			<button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}
+				className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm font-semibold text-kumo-default">
+				{open ? <CaretDownIcon size={14} className="shrink-0" /> : <CaretRightIcon size={14} className="shrink-0" />}
+				<AccountColorDot email={mailbox.email} /><AccountLabel email={mailbox.email} />
+			</button>
+			{!mailbox.retired && (status === "inactive" ? <Link to={`/settings?section=addresses&domain=${encodeURIComponent(mailbox.email.split("@")[1])}`} onClick={closeSidebar} aria-label={`Set up receiving for ${mailbox.email}`} className="flex p-1"><RoutingDot status={status} /></Link> : <RoutingDot status={status} />)}
+		</div>
 		{open && <div className="space-y-0.5">
 			{primaryFolders.map(({ id, label, icon }) => <FolderItem key={id} to={`${base}/emails/${id}`} label={label} icon={icon} count={folders.find((folder) => folder.id === id)?.unreadCount} inset />)}
 			{folders.filter((folder) => !systemIds.has(folder.id)).map((folder) => <FolderItem key={folder.id} to={`${base}/emails/${encodeURIComponent(folder.id)}`} label={folder.name} icon={FolderIcon} count={folder.unreadCount} inset />)}
@@ -79,6 +84,9 @@ export default function Sidebar() {
 	const location = useLocation();
 	const loadFolders = location.pathname !== "/settings";
 	const { data: mailboxes = [] } = useMailboxes();
+	const addressStatus = useAddressStatus();
+	const activeMailboxes = mailboxes.filter((mailbox) => !mailbox.retired);
+	const retiredMailboxes = mailboxes.filter((mailbox) => mailbox.retired);
 	const composeMailbox = mailboxId ? mailboxes.find((mailbox) => mailbox.id === mailboxId && !mailbox.retired) : mailboxes.find((mailbox) => !mailbox.retired);
 	const folderQueries = useQueries({ queries: mailboxes.map((mailbox) => ({ queryKey: queryKeys.folders.list(mailbox.id), queryFn: () => api.listFolders(mailbox.id) as Promise<Folder[]>, enabled: loadFolders, refetchInterval: loadFolders ? 30_000 : false })) });
 	const allUnread = new Map<string, number>();
@@ -111,7 +119,11 @@ export default function Sidebar() {
 			{primaryFolders.map(({ id, label, icon }) => <FolderItem key={id} to={`/?folder=${id}`} label={label} icon={icon} count={allUnread.get(id)} />)}
 			<div className="my-3 border-t border-kumo-line" />
 			<div className="px-5 py-3 text-xs font-medium text-kumo-subtle">Accounts</div>
-			{mailboxes.map((mailbox) => <AccountGroup key={mailbox.id} mailbox={mailbox} initiallyOpen={mailbox.id === (mailboxId || mailboxes[0]?.id)} loadFolders={loadFolders} />)}
+			{activeMailboxes.map((mailbox) => <AccountGroup key={mailbox.id} mailbox={mailbox} initiallyOpen={mailbox.id === (mailboxId || activeMailboxes[0]?.id)} loadFolders={loadFolders} status={addressStatus(mailbox.email)} />)}
+			{retiredMailboxes.length > 0 && <details className="mt-2" open={retiredMailboxes.some((mailbox) => mailbox.id === mailboxId)}>
+				<summary className="cursor-pointer px-5 py-2 text-xs font-medium text-kumo-subtle">Retired ({retiredMailboxes.length})</summary>
+				{retiredMailboxes.map((mailbox) => <AccountGroup key={mailbox.id} mailbox={mailbox} initiallyOpen={mailbox.id === mailboxId} loadFolders={loadFolders} status="unknown" />)}
+			</details>}
 		</nav>
 		<div className="flex items-center gap-1 border-t border-kumo-line px-2 py-3"><div className="min-w-0 flex-1"><FolderItem to="/settings" label="Settings" icon={GearSixIcon} /></div><ThemeToggle /></div>
 	</aside>;

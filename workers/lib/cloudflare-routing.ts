@@ -133,6 +133,22 @@ export async function ensureWorkerRule(env: Env, address: string): Promise<"acti
 	return "active";
 }
 
+// Read-only: which addresses have an enabled rule that sends mail to this Worker.
+export async function inspectWorkerRules(env: Env, domain: string, addresses: string[]): Promise<Record<string, "active" | "inactive">> {
+	const status = await inspectRouting(env, domain);
+	const result: Record<string, "active" | "inactive"> = Object.fromEntries(addresses.map((address) => [address, "inactive"]));
+	if (!status.available || !status.enabled || (status.status && status.status !== "ready")) return result;
+	const zone = (await zoneForDomain(env, domain))!;
+	for (const rule of await routingRules(env, zone.id)) {
+		if (!rule.enabled || !rule.actions.some((action) => action.type === "worker" && action.value?.includes(env.CLOUDFLARE_EMAIL_WORKER || "flarebox"))) continue;
+		for (const matcher of rule.matchers) {
+			const address = matcher.type === "literal" && matcher.field === "to" ? matcher.value?.toLowerCase() : undefined;
+			if (address && address in result) result[address] = "active";
+		}
+	}
+	return result;
+}
+
 export async function removeWorkerRule(env: Env, address: string): Promise<"removed" | "manual"> {
 	if (!env.CLOUDFLARE_API_TOKEN) return "manual";
 	const domain = address.split("@")[1];
