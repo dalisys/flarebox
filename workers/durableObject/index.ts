@@ -697,6 +697,14 @@ export class MailboxDO extends DurableObject<Env> {
 		return [...this.ctx.storage.sql.exec("SELECT address FROM trusted_senders ORDER BY address")].map((row) => String(row.address));
 	}
 
+	async getAutoReplyTime(address: string): Promise<number | undefined> {
+		return this.ctx.storage.get<number>(`auto-reply:${address.trim().toLowerCase()}`);
+	}
+
+	async setAutoReplyTime(address: string, time: number): Promise<void> {
+		await this.ctx.storage.put(`auto-reply:${address.trim().toLowerCase()}`, time);
+	}
+
 	isTrustedSender(address: string): boolean {
 		const normalized = address.trim().toLowerCase();
 		return [...this.ctx.storage.sql.exec("SELECT 1 FROM trusted_senders WHERE address = ? LIMIT 1", normalized)].length > 0;

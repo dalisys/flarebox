@@ -169,7 +169,7 @@ export function useComposeForm(mailboxId?: string, _folder?: string) {
 	const { data: mailboxes = [] } = useMailboxes();
 	const [senderMailboxId, setSenderMailboxId] = useState(mailboxId || "");
 	const selectedMailboxId = senderMailboxId || mailboxId || mailboxes.find((mailbox) => !mailbox.retired)?.id;
-	const { data: currentMailbox } = useMailbox(selectedMailboxId);
+	const { data: currentMailbox, isLoading: mailboxLoading } = useMailbox(selectedMailboxId);
 	const sendEmailMutation = useSendEmail();
 	const saveDraftMutation = useSaveDraft();
 	const replyMutation = useReplyToEmail();
@@ -198,7 +198,8 @@ export function useComposeForm(mailboxId?: string, _folder?: string) {
 	const sigBlock = useMemo(() => getSignatureBlock(currentMailbox?.settings), [currentMailbox]);
 
 	useEffect(() => {
-		if (lastInitializedOptionsRef.current === composeOptions) return;
+		// Wait for the mailbox settings, or the signature would be missing from the first render.
+		if (mailboxLoading || lastInitializedOptionsRef.current === composeOptions) return;
 		lastInitializedOptionsRef.current = composeOptions;
 
 		const initialFields = buildInitialComposeFields(
@@ -213,7 +214,7 @@ export function useComposeForm(mailboxId?: string, _folder?: string) {
 		setShowCcBcc(initialFields.showCcBcc);
 		setSubject(initialFields.subject);
 		setBody(initialFields.body);
-	}, [composeOptions, currentMailbox?.email, sigBlock]);
+	}, [composeOptions, currentMailbox?.email, sigBlock, mailboxLoading]);
 
 	const handleSaveDraft = async () => {
 		if (!selectedMailboxId || isSending) return; setIsSavingDraft(true); setError(null);

@@ -14,7 +14,10 @@ import {
 	generateMessageId,
 	buildThreadingHeaders,
 	listMailboxes,
+	textToHtml,
 } from "./lib/email-helpers";
+import { shouldAutoReply } from "./lib/auto-reply";
+import { replySubject } from "./lib/auto-draft";
 import { SendEmailRequestSchema } from "./lib/schemas";
 import { handleReplyEmail, handleForwardEmail } from "./routes/reply-forward";
 import { Folders } from "../shared/folders";
@@ -657,7 +660,8 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: 
 	const rawEmail = await streamToArrayBuffer(event.raw, event.rawSize);
 	const parsedEmail = await new PostalMime().parse(rawEmail);
 
-	const allowedAddresses = (await getManagedConfig(env)).emailAddresses;
+	const managedConfig = await getManagedConfig(env);
+	const allowedAddresses = managedConfig.emailAddresses;
 	const envelopeRecipient = event.to?.trim().toLowerCase();
 	const allRecipients = (parsedEmail.to || []).map((t) => t.address?.toLowerCase()).filter(Boolean) as string[];
 	const ccRecipients = (parsedEmail.cc || []).map((e) => e.address?.toLowerCase()).filter(Boolean) as string[];
@@ -681,7 +685,7 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: 
 	const messageId = crypto.randomUUID();
 	const mailboxSettingsObject = await env.BUCKET.get(`mailboxes/${mailboxId}.json`);
 	if (!mailboxSettingsObject) { console.log(`Ignoring email for ${mailboxId}: mailbox does not exist`); return; }
-	const settings = await mailboxSettingsObject.json<{ agentEnabled?: boolean; autoDraftEnabled?: boolean; spamFiltering?: SpamSettings }>();
+	const settings = await mailboxSettingsObject.json<{ agentEnabled?: boolean; autoDraftEnabled?: boolean; spamFiltering?: SpamSettings; fromName?: string; signature?: { enabled?: boolean; text?: string }; autoReply?: { enabled?: boolean; subject?: string; message?: string } }>();
 	const stub = env.MAILBOX.get(env.MAILBOX.idFromName(mailboxId));
 	const domain = senderDomain(parsedEmail.from?.address || "");
 	const blockedDomain = !!(domain && await env.BUCKET.head(domainBlockKey(domain)));
@@ -753,6 +757,37 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: 
 			method: "POST", headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ mailboxId, emailId: messageId, sender: (parsedEmail.from?.address || "").toLowerCase(), subject: parsedEmail.subject || "", threadId }),
 		})).catch((e) => console.error("Auto-draft trigger failed:", (e as Error).message)));
+	}
+	const autoReply = settings.autoReply;
+	if (!classification.spam && autoReply?.enabled && autoReply.message?.trim() && sender) {
+		// Runs in the background and never throws: a throw here would make Cloudflare retry and store the email twice.
+		ctx.waitUntil((async () => {
+			const now = Date.now();
+			const lastRepliedAt = await stub.getAutoReplyTime(sender);
+			if (!shouldAutoReply({ sender, envelopeFrom: event.from, headers: parsedEmail.headers, managedDomains: managedConfig.domains, lastRepliedAt, now })) return;
+			const rateLimitError = await (stub as any).checkSendRateLimit();
+			if (rateLimitError) { console.warn("Auto-reply skipped:", rateLimitError); return; }
+			// ponytail: read-then-write, two emails at the same moment can both get a reply; make it one DO call if that matters.
+			await stub.setAutoReplyTime(sender, now);
+			const signature = settings.signature?.enabled && settings.signature.text?.trim() ? `\n\n-- \n${settings.signature.text.trim()}` : "";
+			const text = `${autoReply.message!.trim()}${signature}`;
+			const html = textToHtml(text);
+			const subject = autoReply.subject?.trim() || replySubject(parsedEmail.subject || "");
+			const from = settings.fromName ? { email: mailboxId, name: settings.fromName } : mailboxId;
+			const { messageId: replyId, outgoingMessageId } = generateMessageId(mailboxId.split("@")[1]);
+			const references = [...emailReferences, ...(originalMessageId ? [originalMessageId] : [])];
+			await sendEmail(env.EMAIL, {
+				to: sender, from, subject, text, html,
+				headers: { "Auto-Submitted": "auto-replied", ...(originalMessageId ? buildThreadingHeaders(originalMessageId, references) : {}) },
+			});
+			await stub.createEmail(Folders.SENT, {
+				id: replyId, subject, sender: mailboxId, recipient: sender.toLowerCase(), cc: null, bcc: null,
+				date: new Date().toISOString(), body: html, in_reply_to: originalMessageId,
+				email_references: references.length > 0 ? JSON.stringify(references) : null,
+				thread_id: threadId, message_id: outgoingMessageId,
+				raw_headers: JSON.stringify([{ key: "auto-submitted", value: "auto-replied" }, { key: "message-id", value: `<${outgoingMessageId}>` }]),
+			}, []);
+		})().catch((e) => console.error("Auto-reply failed:", (e as Error).message)));
 	}
 	// The push notification is sent by the email handler after forwarding, which may skip it.
 	return { mailboxId, emailId: messageId, spam: classification.spam, sender: parsedEmail.from?.name || sender, subject: parsedEmail.subject || "" };
