@@ -11,7 +11,8 @@ export interface SignatureSettings {
 export interface MailboxSettings {
 	spamFiltering?: { enabled?: boolean; threshold?: number; blocklist?: string[] };
 	fromName?: string;
-	forwarding?: { enabled: boolean; email: string };
+	/** Copy incoming mail to FORWARD_TO_EMAIL. Missing means on. */
+	forwardIncoming?: boolean;
 	signature?: SignatureSettings;
 	autoReply?: { enabled: boolean; subject: string; message: string };
 	agentSystemPrompt?: string;

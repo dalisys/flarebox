@@ -133,7 +133,7 @@ export default {
 			const { mailboxId, emailId } = received;
 			let forwarded = false;
 			const destination = env.FORWARD_TO_EMAIL?.trim().toLowerCase();
-			if (mailboxId && destination) {
+			if (mailboxId && destination && received.forward) {
 				const managedAddresses = (await getManagedConfig(env)).emailAddresses;
 				const destinationDomain = destination.split("@")[1];
 				if (managedAddresses.includes(destination) || (destinationDomain && env.CATCH_ALL_MAILBOXES?.[destinationDomain])) {

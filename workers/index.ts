@@ -252,7 +252,7 @@ app.post("/api/v1/mailboxes", async (c) => {
 	let routing: "active" | "manual";
 	try { routing = await ensureWorkerRule(c.env, email); }
 	catch (error) { return c.json({ error: (error as Error).message }, 502); }
-	const defaultSettings = { fromName: name, agentEnabled: true, autoDraftEnabled: false, forwarding: { enabled: false, email: "" }, signature: { enabled: false, text: "" }, autoReply: { enabled: false, subject: "", message: "" } };
+	const defaultSettings = { fromName: name, agentEnabled: true, autoDraftEnabled: false, signature: { enabled: false, text: "" }, autoReply: { enabled: false, subject: "", message: "" } };
 	const finalSettings = { ...defaultSettings, ...settings };
 	await addManagedAddress(c.env, email);
 	await c.env.BUCKET.put(key, JSON.stringify(finalSettings));
@@ -774,7 +774,7 @@ async function streamToArrayBuffer(stream: ReadableStream, streamSize: number) {
 	return result;
 }
 
-async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: string; from?: string }, env: Env, ctx: ExecutionContext): Promise<{ mailboxId: string; emailId: string; spam: boolean; sender: string; subject: string } | undefined> {
+async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: string; from?: string }, env: Env, ctx: ExecutionContext): Promise<{ mailboxId: string; emailId: string; spam: boolean; forward: boolean; sender: string; subject: string } | undefined> {
 	const rawEmail = await streamToArrayBuffer(event.raw, event.rawSize);
 	const parsedEmail = await new PostalMime().parse(rawEmail);
 
@@ -803,7 +803,7 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: 
 	const messageId = crypto.randomUUID();
 	const mailboxSettingsObject = await env.BUCKET.get(`mailboxes/${mailboxId}.json`);
 	if (!mailboxSettingsObject) { console.log(`Ignoring email for ${mailboxId}: mailbox does not exist`); return; }
-	const settings = await mailboxSettingsObject.json<{ agentEnabled?: boolean; autoDraftEnabled?: boolean; spamFiltering?: SpamSettings; fromName?: string; signature?: { enabled?: boolean; text?: string }; autoReply?: { enabled?: boolean; subject?: string; message?: string } }>();
+	const settings = await mailboxSettingsObject.json<{ forwardIncoming?: boolean; agentEnabled?: boolean; autoDraftEnabled?: boolean; spamFiltering?: SpamSettings; fromName?: string; signature?: { enabled?: boolean; text?: string }; autoReply?: { enabled?: boolean; subject?: string; message?: string } }>();
 	const stub = env.MAILBOX.get(env.MAILBOX.idFromName(mailboxId));
 	const domain = senderDomain(parsedEmail.from?.address || "");
 	const blockedDomain = !!(domain && await env.BUCKET.head(domainBlockKey(domain)));
@@ -940,7 +940,7 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: 
 		})().catch((e) => console.error("Auto-reply failed:", (e as Error).message)));
 	}
 	// The push notification is sent by the email handler after forwarding, which may skip it.
-	return { mailboxId, emailId: messageId, spam: classification.spam, sender: parsedEmail.from?.name || sender, subject: parsedEmail.subject || "" };
+	return { mailboxId, emailId: messageId, spam: classification.spam, forward: settings.forwardIncoming !== false, sender: parsedEmail.from?.name || sender, subject: parsedEmail.subject || "" };
 }
 
 export { app, receiveEmail };

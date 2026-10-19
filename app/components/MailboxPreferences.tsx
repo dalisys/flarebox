@@ -19,6 +19,7 @@ const fieldClass = "mt-1.5 block w-full rounded-md border border-kumo-line bg-ku
 
 const formFromMailbox = (mailbox: Mailbox) => ({
 	displayName: mailbox.settings?.fromName || mailbox.name || "",
+	forwardIncoming: mailbox.settings?.forwardIncoming !== false,
 	agentEnabled: mailbox.settings?.agentEnabled !== false,
 	autoDraftEnabled: mailbox.settings?.autoDraftEnabled === true,
 	agentPrompt: mailbox.settings?.agentSystemPrompt || "",
@@ -54,6 +55,8 @@ export default function MailboxPreferences({ mailboxIdOverride, embedded = false
 	const aiEnabled = useAiEnabled();
 	const updateMailboxMutation = useUpdateMailbox();
 	const queryClient = useQueryClient();
+	const { data: notifySettings } = useQuery({ queryKey: ["notification-settings"], queryFn: api.getNotificationSettings });
+	const forwardTo = notifySettings?.forwardTo;
 	const { data: trustedSenders = [], isError: trustedSendersError, refetch: retryTrustedSenders } = useQuery({
 		queryKey: ["trusted-senders", mailboxId],
 		queryFn: async ({ signal }) => (await api.getTrustedSenders(mailboxId!, AbortSignal.any([signal, AbortSignal.timeout(10_000)]))).senders,
@@ -103,6 +106,7 @@ export default function MailboxPreferences({ mailboxIdOverride, embedded = false
 		const settings = {
 			...mailbox.settings,
 			fromName: form.displayName,
+			forwardIncoming: form.forwardIncoming,
 			agentEnabled: form.agentEnabled,
 			autoDraftEnabled: form.agentEnabled && form.autoDraftEnabled,
 			agentSystemPrompt: form.agentPrompt.trim() || undefined,
@@ -134,6 +138,12 @@ export default function MailboxPreferences({ mailboxIdOverride, embedded = false
 						<Input label="Sender name" value={form.displayName} onChange={(e) => set("displayName", e.target.value)} />
 						<Input label="Email address" type="email" value={mailbox.email} disabled />
 					</div>
+				</Section>
+
+				<Section title="Forwarding" description="Copy incoming mail for this address to another inbox.">
+					<Row label="Forward incoming mail" description={forwardTo ? <>Sends a copy to {forwardTo}.</> : "Forwarding is not set up. Set the FORWARD_TO_EMAIL secret to forward mail."}>
+						<Switch aria-label="Forward incoming mail" checked={form.forwardIncoming} disabled={!forwardTo} onCheckedChange={(value) => set("forwardIncoming", value)} />
+					</Row>
 				</Section>
 
 				<Section title="Signature" description="Added to new emails, replies, and forwards from this address.">
