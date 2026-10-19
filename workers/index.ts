@@ -6,7 +6,7 @@ import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import PostalMime from "postal-mime";
 import { z } from "zod";
-import { sendEmail } from "./email-sender";
+import { sendEmail, sendProvider } from "./email-sender";
 import { storeAttachments, type StoredAttachment } from "./lib/attachments";
 import {
 	validateSender,
@@ -100,7 +100,7 @@ app.use("/api/v1/mailboxes/:mailboxId/*", requireMailbox);
 
 // -- Config ---------------------------------------------------------
 
-app.get("/api/v1/config", async (c) => c.json({ ...(await getManagedConfig(c.env)), aiEnabled: Boolean(c.env.OPENROUTER_API_KEY) }));
+app.get("/api/v1/config", async (c) => c.json({ ...(await getManagedConfig(c.env)), aiEnabled: Boolean(c.env.OPENROUTER_API_KEY), sendProvider: sendProvider(c.env) }));
 
 // -- AI settings ----------------------------------------------------
 
@@ -463,7 +463,8 @@ app.post("/api/v1/mailboxes/:mailboxId/emails", async (c: AppContext) => {
 	}, attachmentData);
 
 	c.executionCtx.waitUntil(
-		sendEmail(c.env.EMAIL, {
+		sendEmail(c.env, {
+			messageId: outgoingMessageId,
 			to, cc, bcc, from, subject, html, text,
 			attachments: attachments?.map((att) => ({ content: att.content, filename: att.filename, type: att.type, disposition: att.disposition || "attachment", contentId: att.contentId })),
 			...(in_reply_to ? { headers: buildThreadingHeaders(in_reply_to, references || []) } : {}),

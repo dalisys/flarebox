@@ -10,6 +10,7 @@ export interface Env extends Cloudflare.Env {
 	CATCH_ALL_MAILBOXES?: Record<string, string>;
 	FORWARD_TO_EMAIL?: string;
 	OPENROUTER_API_KEY?: string;
+	RESEND_API_KEY?: string;
 	RSPAMD_CHECK_URL: string;
 	RSPAMD_API_KEY: string;
 	RSPAMD_BEARER_TOKEN?: string;

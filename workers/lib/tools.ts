@@ -455,7 +455,8 @@ export async function toolSendReply(
 	const fullBodyHtml = sanitizedBody + quotedBlock;
 
 	try {
-		await sendEmail(env.EMAIL, {
+		await sendEmail(env, {
+			messageId: outgoingMessageId,
 			to: params.to,
 			from: mailboxId,
 			subject: params.subject,
@@ -522,7 +523,8 @@ export async function toolSendEmail(
 	}
 
 	try {
-		await sendEmail(env.EMAIL, {
+		await sendEmail(env, {
+			messageId: outgoingMessageId,
 			to: params.to,
 			from: mailboxId,
 			subject: params.subject,

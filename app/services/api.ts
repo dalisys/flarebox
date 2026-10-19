@@ -119,7 +119,7 @@ type AiSettings = { model: string; defaultModel: string };
 const api = {
 	// Config
 	getConfig: (signal?: AbortSignal) =>
-		get<{ domains: string[]; emailAddresses: string[]; aiEnabled: boolean }>("/api/v1/config", { signal }),
+		get<{ domains: string[]; emailAddresses: string[]; aiEnabled: boolean; sendProvider?: "resend" | "cloudflare" }>("/api/v1/config", { signal }),
 	getNotificationSettings: () => get<NotificationSettings>("/api/v1/notifications/settings"),
 	saveNotificationSettings: (settings: { skipForwarded: boolean }) => put<NotificationSettings>("/api/v1/notifications/settings", settings),
 	getAiSettings: () => get<AiSettings>("/api/v1/ai/settings"),
