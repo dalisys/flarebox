@@ -70,9 +70,9 @@ Notes:
 - The Worker sends mail with the `send_email` binding. See the [Email Service docs](https://developers.cloudflare.com/email-routing/email-workers/send-email-workers/).
 - To send from a domain, [onboard that domain to Email Sending](https://developers.cloudflare.com/email-service/get-started/).
 
-## 5. AI (OpenRouter)
+## 5. AI (OpenRouter, optional)
 
-All AI features need an OpenRouter key: the agent, the prompt-injection scanner, and the draft verifier.
+The key is only for the AI agent and automatic drafts. Without it, email works normally and the agent panel shows an error.
 
 ```bash
 npx wrangler secret put OPENROUTER_API_KEY --name flarebox
@@ -107,7 +107,7 @@ The app hostname and the email domains are set up separately.
 | `CATCH_ALL_MAILBOXES` | `wrangler.jsonc` | Domain → catch-all mailbox map |
 | `OPENROUTER_MODEL` | `wrangler.jsonc` | AI model |
 | `POLICY_AUD`, `TEAM_DOMAIN` | Secret | Cloudflare Access |
-| `OPENROUTER_API_KEY` | Secret | AI features |
+| `OPENROUTER_API_KEY` | Secret | Optional AI agent |
 | `CLOUDFLARE_API_TOKEN` | Secret | Optional routing management |
 | `FORWARD_TO_EMAIL` | Secret | Optional [forwarding](accounts-and-domains.md#forwarding) |
 | `RSPAMD_*` | Secret | Optional [Rspamd](spam-filtering.md#rspamd) |

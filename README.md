@@ -37,7 +37,7 @@ Added in Flarebox:
 
 - Cloudflare account with a domain
 - Cloudflare Access (Zero Trust)
-- OpenRouter API key
+- OpenRouter API key, only for the AI agent
 
 ---
 
@@ -66,7 +66,9 @@ npx wrangler secret put TEAM_DOMAIN --name flarebox   # https://<team>.cloudflar
 
 The Worker rejects all requests until both are set.
 
-### 3. Add the AI key
+### 3. Add the AI key (optional)
+
+Skip this to run Flarebox as a plain email client. Only the agent panel needs it.
 
 ```bash
 npx wrangler secret put OPENROUTER_API_KEY --name flarebox
@@ -91,7 +93,7 @@ Mailboxes in `EMAIL_ADDRESSES` are created on first load. Add more in **Settings
 | --- | --- | --- | --- |
 | `POLICY_AUD` | secret | yes | Access audience tag |
 | `TEAM_DOMAIN` | secret | yes | Access team URL |
-| `OPENROUTER_API_KEY` | secret | yes | AI features |
+| `OPENROUTER_API_KEY` | secret | no | AI agent and auto-drafts |
 | `DOMAINS` | var | yes | Default email domains |
 | `EMAIL_ADDRESSES` | var | no | Mailboxes created on first load |
 | `OPENROUTER_MODEL` | var | no | Default `openai/gpt-4.1-mini` |
