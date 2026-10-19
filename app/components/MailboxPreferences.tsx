@@ -146,7 +146,7 @@ export default function MailboxPreferences({ mailboxIdOverride, embedded = false
 					</div>
 				</Section>
 
-				<Section title="Automatic reply" description="Sends one reply to each sender every 4 days. Not sent to Junk, mailing lists, or no-reply addresses.">
+				<Section title="Automatic reply" description="Sends one reply to each sender every 4 days. Not sent to Junk, mailing lists, or no-reply addresses. Needs Rspamd to confirm the sender is real; without Rspamd no reply is sent.">
 					<Row label="Send automatic reply">
 						<Switch aria-label="Send automatic reply" checked={form.autoReplyEnabled} onCheckedChange={(value) => set("autoReplyEnabled", value)} />
 					</Row>

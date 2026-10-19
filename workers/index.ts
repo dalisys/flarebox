@@ -782,7 +782,8 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: 
 			const from = settings.fromName ? { email: mailboxId, name: settings.fromName } : mailboxId;
 			const { messageId: replyId, outgoingMessageId } = generateMessageId(mailboxId.split("@")[1]);
 			const references = [...emailReferences, ...(originalMessageId ? [originalMessageId] : [])];
-			await sendEmail(env.EMAIL, {
+			await sendEmail(env, {
+				messageId: outgoingMessageId,
 				to: sender, from, subject, text, html,
 				headers: { "Auto-Submitted": "auto-replied", ...(originalMessageId ? buildThreadingHeaders(originalMessageId, references) : {}) },
 			});
