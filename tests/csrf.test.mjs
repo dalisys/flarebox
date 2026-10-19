@@ -14,3 +14,9 @@ test("blocks cross-site writes and allows same-origin, safe and non-browser requ
 	assert.equal(isCrossSiteWrite(req("POST")), false);
 	assert.equal(isCrossSiteWrite(req("GET", { "sec-fetch-site": "cross-site" })), false);
 });
+
+test("blocks cross-site WebSocket upgrades", () => {
+	assert.equal(isCrossSiteWrite(req("GET", { upgrade: "websocket", origin: "https://evil.example" })), true);
+	assert.equal(isCrossSiteWrite(req("GET", { upgrade: "websocket", "sec-fetch-site": "cross-site" })), true);
+	assert.equal(isCrossSiteWrite(req("GET", { upgrade: "websocket", origin: "https://mail.example.com" })), false);
+});
