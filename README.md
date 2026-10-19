@@ -99,6 +99,7 @@ Mailboxes in `EMAIL_ADDRESSES` are created on first load. Add more in **Settings
 | `OPENROUTER_MODEL` | var | no | Default `openai/gpt-4.1-mini` |
 | `CATCH_ALL_MAILBOXES` | var | no | Domain → catch-all mailbox |
 | `CLOUDFLARE_API_TOKEN` | secret | no | Manage Email Routing from the UI |
+| `RESEND_API_KEY` | secret | no | Send through Resend instead of Cloudflare, see [setup](docs/setup.md#option-resend-free-tier) |
 | `FORWARD_TO_EMAIL` | secret | no | Copy incoming mail to another address |
 | `RSPAMD_*` | secret | no | Rspamd scanner, see [spam docs](docs/spam-filtering.md) |
 

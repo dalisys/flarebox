@@ -7,6 +7,10 @@ TEAM_DOMAIN=https://your-team.cloudflareaccess.com
 # CLOUDFLARE_API_TOKEN=your-scoped-cloudflare-token
 # CLOUDFLARE_EMAIL_WORKER=flarebox
 
+# Optional: send outgoing mail through Resend instead of Cloudflare Email Sending.
+# Store the production value with `wrangler secret put RESEND_API_KEY`.
+# RESEND_API_KEY=re_your_resend_api_key
+
 # Optional Rspamd scanner. Store production values as Worker secrets, never in wrangler.jsonc.
 # RSPAMD_CHECK_URL=https://rspamd.example.com/checkv2
 # RSPAMD_API_KEY=your-api-key-for-basic-auth-username-worker

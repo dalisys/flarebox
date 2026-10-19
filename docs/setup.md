@@ -69,6 +69,24 @@ Notes:
 
 - The Worker sends mail with the `send_email` binding. See the [Email Service docs](https://developers.cloudflare.com/email-routing/email-workers/send-email-workers/).
 - To send from a domain, [onboard that domain to Email Sending](https://developers.cloudflare.com/email-service/get-started/).
+- Cloudflare Email Sending needs a paid Workers plan.
+
+### Option: Resend (free tier)
+
+Use [Resend](https://resend.com) to send mail without a paid Workers plan. Receiving still uses Cloudflare Email Routing (step 2).
+
+1. Create a Resend account.
+2. In Resend, add your sending domain. Add the DNS records that Resend shows to the domain in the Cloudflare dashboard. Wait until Resend shows the domain as verified.
+3. In Resend, create an API key with **Sending access**.
+4. Store the key as a Worker secret:
+
+```bash
+npx wrangler secret put RESEND_API_KEY --name flarebox
+```
+
+- When `RESEND_API_KEY` is set, all outgoing mail goes through Resend. Delete the secret to go back to Cloudflare Email Sending.
+- **Settings → Domains** shows which provider is active. The app never shows or stores the key.
+- For local development, put `RESEND_API_KEY=...` in `.dev.vars`.
 
 ## 5. AI (OpenRouter, optional)
 

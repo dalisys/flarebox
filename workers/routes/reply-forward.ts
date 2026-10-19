@@ -88,7 +88,8 @@ export async function handleReplyEmail(c: AppContext) {
 	await stub.markThreadRead(thread_id);
 
 	c.executionCtx.waitUntil(
-		sendEmail(c.env.EMAIL, {
+		sendEmail(c.env, {
+			messageId: outgoingMessageId,
 			to,
 			cc,
 			bcc,
@@ -176,7 +177,8 @@ export async function handleForwardEmail(c: AppContext) {
 	await stub.updateEmail(originalEmail.id, { read: true });
 
 	c.executionCtx.waitUntil(
-		sendEmail(c.env.EMAIL, {
+		sendEmail(c.env, {
+			messageId: outgoingMessageId,
 			to,
 			cc,
 			bcc,
