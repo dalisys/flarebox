@@ -32,6 +32,7 @@ import { disableCatchAll, enableRouting, ensureWorkerRule, inspectCatchAll, insp
 import { mailboxArchive } from "./lib/mailbox-export";
 import { getNotifySettings, getVapidKeys, isPushEndpoint, removeSubscription, saveNotifySettings, saveSubscription } from "./lib/push";
 import { defaultModel, getModelId, MODEL_ID_PATTERN, saveModelId } from "./lib/model";
+import { IMPORT_MAX_BYTES, IMPORT_MAX_MESSAGES, importMessage } from "./lib/mail-import";
 
 type AppContext = Context<MailboxContext>;
 
@@ -590,6 +591,23 @@ app.post("/api/v1/mailboxes/:mailboxId/emails/:id/not-spam", async (c: AppContex
 	const domain = senderDomain(result.sender);
 	if (domain) await c.env.BUCKET.delete(domainBlockKey(domain));
 	return c.json(result);
+});
+
+// Gmail Takeout import. The browser splits the .mbox file and sends small
+// batches, so one request never holds the whole export.
+app.post("/api/v1/mailboxes/:mailboxId/import", async (c: AppContext) => {
+	const size = Number(c.req.header("content-length"));
+	if (!size || size > IMPORT_MAX_BYTES) return c.json({ error: "Send at most 40 MB per batch" }, 413);
+	const form = await c.req.formData().catch(() => null);
+	const files = (form?.getAll("message") ?? []).filter((item): item is File => typeof item !== "string");
+	if (files.length === 0 || files.length > IMPORT_MAX_MESSAGES) return c.json({ error: `Send 1 to ${IMPORT_MAX_MESSAGES} messages per batch` }, 400);
+	const mailboxId = decodeURIComponent(c.req.param("mailboxId")!).toLowerCase();
+	const counts = { imported: 0, skipped: 0, failed: 0 };
+	for (const file of files) {
+		try { counts[await importMessage(c.env, c.var.mailboxStub, mailboxId, new Uint8Array(await file.arrayBuffer()))]++; }
+		catch (error) { counts.failed++; console.error("Import failed for one message:", (error as Error).message); }
+	}
+	return c.json(counts);
 });
 
 // -- Threads --------------------------------------------------------

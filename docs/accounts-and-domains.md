@@ -52,6 +52,37 @@ After removal:
 - If routing is not automatic, delete the old rule yourself.
 - If a catch-all is on for the domain, the old address still receives mail. Turn the catch-all off to stop it.
 
+### Import from Gmail
+
+1. Go to [Google Takeout](https://takeout.google.com).
+2. Click **Deselect all**. Then select only **Mail**.
+3. Keep the format **MBOX**. Create the export and download it.
+4. Unzip the download. The mail is in `Takeout/Mail/` as an `.mbox` file.
+5. In Flarebox, open **Settings** and the account page.
+6. In **Import mail**, choose the `.mbox` file. Click **Start import**.
+
+Use a computer. Large exports take a long time on a phone. Keep the page open until it says **Import finished**.
+
+Gmail labels become folders:
+
+| Gmail label | Flarebox |
+| --- | --- |
+| Inbox | Inbox |
+| Sent | Sent |
+| Spam | Junk |
+| Trash | Trash |
+| Drafts | Drafts |
+| All other mail | Archive |
+| Starred | Starred |
+| Unread | Unread |
+
+- Custom labels are not copied. That mail goes to Archive (or Inbox if it was in the Inbox).
+- Chats are skipped.
+- The message keeps its original date and its conversation.
+- Spam checks, filters, auto-drafts, auto-replies, and notifications do not run on imported mail.
+- To resume after a stop or cancel, choose the same file and start again. Messages already in the account are skipped, so a second run does not make copies.
+- The browser reads the file and sends 50 messages (or 5 MB) per request. A single message over 35 MB is counted as failed.
+
 ## Domains
 
 ### Add a domain
@@ -141,5 +172,6 @@ The reply has the `Auto-Submitted: auto-replied` header, so other auto-responder
 ## Tests
 
 - `npm run test:mailbox` checks the archive format.
+- `node --test tests/mbox.test.mjs` checks the `.mbox` splitter and the Gmail label mapping.
 - `node --test tests/cloudflare-routing.test.mjs` checks domain activation, subdomains, and mail-record protection with mocked Cloudflare responses.
 - `node --experimental-strip-types --test tests/auto-reply.test.mjs` checks when an automatic reply is sent.

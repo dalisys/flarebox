@@ -900,6 +900,18 @@ export class MailboxDO extends DurableObject<Env> {
 		return null;
 	}
 
+	/**
+	 * True when this ID, or this Message-ID from the same sender, is already
+	 * stored. Lets imports resume safely. The sender check stops a forged
+	 * Message-ID in one message from hiding another message.
+	 */
+	async hasEmail(id: string, messageId: string | null, sender: string): Promise<boolean> {
+		return [...this.ctx.storage.sql.exec(
+			"SELECT 1 FROM emails WHERE id = ?1 OR (?2 IS NOT NULL AND message_id = ?2 AND LOWER(sender) = ?3) LIMIT 1",
+			id, messageId, sender,
+		)].length > 0;
+	}
+
 	// ── Email creation (Drizzle) ───────────────────────────────────
 
 	async createEmail(

@@ -3,6 +3,7 @@ import { ArrowRightIcon, CaretRightIcon, DownloadSimpleIcon, EnvelopeSimpleIcon 
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import MailboxPreferences from "~/components/MailboxPreferences";
+import MailImportPanel from "~/components/MailImportPanel";
 import api from "~/services/api";
 import type { Mailbox } from "~/types";
 
@@ -118,6 +119,8 @@ export default function AccountSettingsPanel({ mailbox, mailboxes, domains, onCh
 		</div>
 
 		{!mailbox.retired && <MailboxPreferences mailboxIdOverride={mailbox.id} embedded />}
+
+		{!mailbox.retired && <MailImportPanel mailboxId={mailbox.id} />}
 
 		<details open={mailbox.retired || Boolean(lockedAction)} className="group max-w-2xl rounded-lg border border-kumo-line">
 			<summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden"><CaretRightIcon size={14} className="text-kumo-subtle transition-transform group-open:rotate-90" /><span><span className="block text-sm font-semibold text-kumo-default">Change, move, or remove this address</span><span className="mt-0.5 block text-xs text-kumo-subtle">Rename the address, merge it into another account, or download and delete its mail.</span></span></summary>
