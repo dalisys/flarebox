@@ -1,0 +1,17 @@
+# Cloudflare Access (required in production). TEAM_DOMAIN may be the base Access URL or the full /cdn-cgi/access/certs URL.
+POLICY_AUD=your-access-policy-audience-tag
+TEAM_DOMAIN=https://your-team.cloudflareaccess.com
+
+# Optional: lets the Domains screen inspect and configure Cloudflare Email Routing.
+# Store the production value with `wrangler secret put CLOUDFLARE_API_TOKEN`.
+# CLOUDFLARE_API_TOKEN=your-scoped-cloudflare-token
+# CLOUDFLARE_EMAIL_WORKER=flarebox
+
+# Optional Rspamd scanner. Store production values as Worker secrets, never in wrangler.jsonc.
+# RSPAMD_CHECK_URL=https://rspamd.example.com/checkv2
+# RSPAMD_API_KEY=your-api-key-for-basic-auth-username-worker
+# Alternative authentication methods:
+# RSPAMD_ACCESS_CLIENT_ID=your-service-token-id
+# RSPAMD_ACCESS_CLIENT_SECRET=your-service-token-secret
+# Or use a reverse proxy that accepts a bearer token:
+# RSPAMD_BEARER_TOKEN=your-reverse-proxy-token
