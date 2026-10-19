@@ -53,6 +53,7 @@ export default function ThemeToggle() {
 				icon={isDark ? <SunIcon size={20} /> : <MoonIcon size={20} />}
 				onClick={toggle}
 				aria-label={isDark ? "Use light mode" : "Use dark mode"}
+				title=""
 			/>
 		</Tooltip>
 	);

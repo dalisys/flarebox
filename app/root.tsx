@@ -129,6 +129,17 @@ export default function App() {
 		return () => observer.disconnect();
 	}, []);
 
+	// Give every labelled control a hover tooltip: copy aria-label to title on first hover.
+	useEffect(() => {
+		const onOver = (event: MouseEvent) => {
+			const el = (event.target as Element | null)?.closest?.("[aria-label]:not([title])");
+			const label = el?.getAttribute("aria-label");
+			if (el && label) el.setAttribute("title", label);
+		};
+		document.addEventListener("mouseover", onOver);
+		return () => document.removeEventListener("mouseover", onOver);
+	}, []);
+
 	useEffect(() => {
 		if (!("serviceWorker" in navigator)) return;
 		const register = () => {
