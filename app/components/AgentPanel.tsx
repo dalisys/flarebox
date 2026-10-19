@@ -317,8 +317,9 @@ function AgentChatConnected({
 		if (el) el.scrollTop = el.scrollHeight;
 	}, [messages]);
 
+	// On phones, opening the keyboard right away would hide the chat.
 	useEffect(() => {
-		inputRef.current?.focus();
+		if (window.matchMedia("(min-width: 1024px)").matches) inputRef.current?.focus();
 	}, []);
 
 	const handleSend = () => {
@@ -471,7 +472,7 @@ function AgentChatConnected({
 			</div>
 
 			{/* Input */}
-			<div className="shrink-0 border-t border-kumo-line px-3 py-2">
+			<div className="agent-chat-input shrink-0 border-t border-kumo-line px-3 py-2">
 				{isStreaming ? (
 					<div className="flex justify-center">
 						<Button
@@ -495,7 +496,7 @@ function AgentChatConnected({
 							placeholder="Ask your email agent..."
 							rows={1}
 							aria-label="Chat message input"
-							className="flex-1 resize-none rounded-lg border border-kumo-line bg-kumo-control px-3 py-2 text-xs text-kumo-default placeholder:text-kumo-subtle focus:outline-none focus:ring-1 focus:ring-kumo-ring min-h-[36px] max-h-[100px]"
+							className="flex-1 resize-none rounded-lg border border-kumo-line bg-kumo-control px-3 py-2 text-xs text-kumo-default placeholder:text-kumo-subtle focus:outline-none focus:ring-1 focus:ring-kumo-ring min-h-11 max-h-[100px] lg:min-h-[36px]"
 							style={{ height: "auto", overflow: "hidden" }}
 							onInput={(e) => {
 								const t = e.target as HTMLTextAreaElement;

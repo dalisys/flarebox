@@ -87,7 +87,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 					href="/favicon.ico"
 					sizes="48x48 32x32 16x16"
 				/>
-				<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+				<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
 				<meta name="theme-color" content="#1c1f2a" suppressHydrationWarning />
 				<meta name="color-scheme" content="dark light" />
 				<script dangerouslySetInnerHTML={{ __html: `try { var theme = localStorage.getItem("agentic-inbox-theme"); document.documentElement.dataset.mode = theme === "dark" || (theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light"; } catch { document.documentElement.dataset.mode = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"; } document.querySelector('meta[name="theme-color"]').content = document.documentElement.dataset.mode === "dark" ? "#1c1f2a" : "#f6f8fc";` }} />

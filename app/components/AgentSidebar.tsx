@@ -3,7 +3,7 @@
 //     https://opensource.org/licenses/Apache-2.0
 
 import { Loader } from "@cloudflare/kumo";
-import { PlugsIcon, RobotIcon } from "@phosphor-icons/react";
+import { ArrowLeftIcon, PlugsIcon, RobotIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router";
 import { useMailbox } from "~/queries/mailboxes";
@@ -42,7 +42,7 @@ function LazyAgentPanel() {
 	return <AgentChat />;
 }
 
-export default function AgentSidebar() {
+export default function AgentSidebar({ onClose }: { onClose?: () => void }) {
 	const [activeTab, setActiveTab] = useState<"agent" | "mcp">("agent");
 	const { mailboxId } = useParams<{ mailboxId: string }>();
 	const { data: mailbox } = useMailbox(mailboxId);
@@ -50,7 +50,8 @@ export default function AgentSidebar() {
 	return (
 		<div className="flex flex-col h-full">
 			{/* Tab bar */}
-			<div className="flex items-center border-b border-kumo-line shrink-0">
+			<div className="agent-sheet-tabs flex items-center border-b border-kumo-line shrink-0">
+				{onClose && <button type="button" onClick={onClose} aria-label="Close assistant" className="mail-icon-button ml-1 lg:hidden"><ArrowLeftIcon size={24} /></button>}
 				<button
 					type="button"
 					onClick={() => setActiveTab("agent")}
@@ -78,7 +79,7 @@ export default function AgentSidebar() {
 			</div>
 
 			{/* Tab content — keep agent mounted so chat isn't lost */}
-			<div className="flex-1 min-h-0 overflow-hidden">
+			<div className="agent-sheet-body flex-1 min-h-0 overflow-hidden">
 				<div className={activeTab === "agent" ? "h-full" : "hidden"}>
 					{mailbox?.settings?.agentEnabled === false ? (
 						<div className="p-5 text-sm text-kumo-subtle">AI assistant is off for this mailbox. You can turn it back on in Settings.</div>

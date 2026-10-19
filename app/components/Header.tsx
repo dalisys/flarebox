@@ -53,7 +53,7 @@ export default function Header() {
 				<AdvancedSearch compact mailboxId={mailboxId} query={searchQuery} onApply={performSearch} />
 			</div>
 			<div className="mail-header-actions">
-				{mailboxId && aiEnabled && <Tooltip content={isAgentPanelOpen ? "Hide assistant" : "Show assistant"} side="bottom" asChild><Button variant={isAgentPanelOpen ? "secondary" : "ghost"} shape="square" icon={<RobotIcon size={22} />} onClick={toggleAgentPanel} aria-label="Toggle agent panel" className="hidden lg:inline-flex mail-icon-button" /></Tooltip>}
+				{mailboxId && aiEnabled && <Tooltip content={isAgentPanelOpen ? "Hide assistant" : "Show assistant"} side="bottom" asChild><Button variant={isAgentPanelOpen ? "secondary" : "ghost"} shape="square" icon={<RobotIcon size={22} />} onClick={toggleAgentPanel} aria-label="Toggle agent panel" className="mail-icon-button" /></Tooltip>}
 				<AccountSwitcher />
 			</div>
 		</header>
