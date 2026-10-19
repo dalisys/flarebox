@@ -142,7 +142,7 @@ export function getSignatureBlock(settings?: {
 		// Text signatures are HTML-escaped since they have no formatting.
 		const content = sig.html
 			? DOMPurify.sanitize(sig.html)
-			: escapeHtml(sig.text || "");
+			: escapeHtml(sig.text || "").replace(/\n/g, "<br>");
 		return `<div style="border-top: 1px solid #ccc; margin-top: 16px; padding-top: 12px;">${content}</div>`;
 	}
 	return "";

@@ -24,6 +24,11 @@ const formFromMailbox = (mailbox: Mailbox) => ({
 	spamEnabled: mailbox.settings?.spamFiltering?.enabled !== false,
 	spamThreshold: mailbox.settings?.spamFiltering?.threshold ?? 5,
 	spamBlocklist: (mailbox.settings?.spamFiltering?.blocklist ?? []).join("\n"),
+	signatureEnabled: mailbox.settings?.signature?.enabled === true,
+	signatureText: mailbox.settings?.signature?.text || "",
+	autoReplyEnabled: mailbox.settings?.autoReply?.enabled === true,
+	autoReplySubject: mailbox.settings?.autoReply?.subject || "",
+	autoReplyMessage: mailbox.settings?.autoReply?.message || "",
 });
 
 function Section({ title, description, children }: { title: string; description: string; children: ReactNode }) {
@@ -100,6 +105,8 @@ export default function MailboxPreferences({ mailboxIdOverride, embedded = false
 			agentEnabled: form.agentEnabled,
 			autoDraftEnabled: form.agentEnabled && form.autoDraftEnabled,
 			agentSystemPrompt: form.agentPrompt.trim() || undefined,
+			signature: { enabled: form.signatureEnabled, text: form.signatureText.trim() },
+			autoReply: { enabled: form.autoReplyEnabled, subject: form.autoReplySubject.trim(), message: form.autoReplyMessage.trim() },
 			spamFiltering: {
 				enabled: form.spamEnabled,
 				threshold: form.spamThreshold,
@@ -125,6 +132,30 @@ export default function MailboxPreferences({ mailboxIdOverride, embedded = false
 					<div className="px-5 py-4 space-y-3">
 						<Input label="Sender name" value={form.displayName} onChange={(e) => set("displayName", e.target.value)} />
 						<Input label="Email address" type="email" value={mailbox.email} disabled />
+					</div>
+				</Section>
+
+				<Section title="Signature" description="Added to new emails, replies, and forwards from this address.">
+					<Row label="Add signature">
+						<Switch aria-label="Add signature" checked={form.signatureEnabled} onCheckedChange={(value) => set("signatureEnabled", value)} />
+					</Row>
+					<div className="px-5 py-4">
+						<label className="block text-sm text-kumo-default">Signature text
+							<textarea value={form.signatureText} onChange={(e) => set("signatureText", e.target.value)} rows={4} placeholder={"Sam Lee\nAcme Inc."} disabled={!form.signatureEnabled} className={`${fieldClass} resize-y`} />
+						</label>
+					</div>
+				</Section>
+
+				<Section title="Automatic reply" description="Sends one reply to each sender every 4 days. Not sent to Junk, mailing lists, or no-reply addresses.">
+					<Row label="Send automatic reply">
+						<Switch aria-label="Send automatic reply" checked={form.autoReplyEnabled} onCheckedChange={(value) => set("autoReplyEnabled", value)} />
+					</Row>
+					<div className="px-5 py-4 space-y-3">
+						<Input label="Subject" value={form.autoReplySubject} placeholder="Re: original subject" disabled={!form.autoReplyEnabled} onChange={(e) => set("autoReplySubject", e.target.value)} />
+						<label className="block text-sm text-kumo-default">Message
+							<textarea value={form.autoReplyMessage} onChange={(e) => set("autoReplyMessage", e.target.value)} rows={5} placeholder={"I am away until Monday. I will reply when I am back."} disabled={!form.autoReplyEnabled} className={`${fieldClass} resize-y`} />
+						</label>
+						{form.autoReplyEnabled && !form.autoReplyMessage.trim() && <p className="text-xs text-kumo-error">Write a message. No reply is sent without one.</p>}
 					</div>
 				</Section>
 

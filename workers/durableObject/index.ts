@@ -697,6 +697,20 @@ export class MailboxDO extends DurableObject<Env> {
 		return [...this.ctx.storage.sql.exec("SELECT address FROM trusted_senders ORDER BY address")].map((row) => String(row.address));
 	}
 
+	async getAutoReplyTime(address: string): Promise<number | undefined> {
+		return this.ctx.storage.get<number>(`auto-reply:${address.trim().toLowerCase()}`);
+	}
+
+	/** Records an automatic reply unless this sender got one in the window, or the hourly cap is reached. */
+	async claimAutoReply(address: string, now: number, windowMs: number, hourlyCap: number): Promise<boolean> {
+		const key = `auto-reply:${address.trim().toLowerCase()}`;
+		const hourKey = `auto-reply-hour:${Math.floor(now / 3_600_000)}`;
+		const [last, sentThisHour = 0] = [await this.ctx.storage.get<number>(key), await this.ctx.storage.get<number>(hourKey)];
+		if ((last !== undefined && now - last < windowMs) || sentThisHour >= hourlyCap) return false;
+		await this.ctx.storage.put({ [key]: now, [hourKey]: sentThisHour + 1 });
+		return true;
+	}
+
 	isTrustedSender(address: string): boolean {
 		const normalized = address.trim().toLowerCase();
 		return [...this.ctx.storage.sql.exec("SELECT 1 FROM trusted_senders WHERE address = ? LIMIT 1", normalized)].length > 0;
