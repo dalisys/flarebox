@@ -866,6 +866,14 @@ export class MailboxDO extends DurableObject<Env> {
 		return null;
 	}
 
+	/** True when this ID or Message-ID is already stored. Lets imports resume safely. */
+	async hasEmail(id: string, messageId: string | null): Promise<boolean> {
+		return [...this.ctx.storage.sql.exec(
+			"SELECT 1 FROM emails WHERE id = ?1 OR (?2 IS NOT NULL AND message_id = ?2) LIMIT 1",
+			id, messageId,
+		)].length > 0;
+	}
+
 	// ── Email creation (Drizzle) ───────────────────────────────────
 
 	async createEmail(

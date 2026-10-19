@@ -172,4 +172,9 @@ export const mailboxMigrations: Migration[] = [
 		name: "9_add_trusted_senders",
 		sql: txn(`CREATE TABLE trusted_senders (address TEXT PRIMARY KEY);`),
 	},
+	{
+		// Mail import skips messages whose Message-ID is already stored.
+		name: "10_add_message_id_index",
+		sql: `CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails(message_id);`,
+	},
 ];
