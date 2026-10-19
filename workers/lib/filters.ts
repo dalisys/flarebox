@@ -16,7 +16,8 @@ export const FilterRuleSchema = z.object({
 		.refine((c) => Object.values(c).some(Boolean), { message: "Add at least one condition" }),
 	actions: z.object({ folder: z.string().min(1).max(100).optional(), markRead: z.boolean().optional(), star: z.boolean().optional() })
 		.refine((a) => a.folder || a.markRead || a.star, { message: "Add at least one action" })
-		.refine((a) => a.folder !== "sent" && a.folder !== "draft", { message: "Mail cannot be moved to Sent or Drafts" }),
+		// Snoozed and Scheduled need a time, so filters cannot move mail there.
+		.refine((a) => !a.folder || !["sent", "draft", "snoozed", "scheduled"].includes(a.folder), { message: "Mail cannot be moved to Sent, Drafts, Snoozed, or Scheduled" }),
 });
 
 // Array order is rule order.

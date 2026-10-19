@@ -4,6 +4,8 @@
 
 import type { Email, FilterRule, Folder, Mailbox } from "~/types";
 
+export type BulkAction = "archive" | "read" | "unread" | "delete" | "snooze" | "unsnooze";
+
 const REQUEST_TIMEOUT_MS = 30_000;
 
 export class ApiError extends Error {
@@ -168,8 +170,8 @@ const api = {
 		put<Email>(`/api/v1/mailboxes/${mailboxId}/emails/${id}`, data),
 	deleteEmail: (mailboxId: string, id: string) =>
 		del<void>(`/api/v1/mailboxes/${mailboxId}/emails/${id}`),
-	bulkEmails: (mailboxId: string, action: "archive" | "read" | "unread" | "delete", folder: string, ids: string[], expandThreads = true) =>
-		post<{ count: number }>(`/api/v1/mailboxes/${encodeURIComponent(mailboxId)}/emails/bulk`, { action, folder, ids, expandThreads }),
+	bulkEmails: (mailboxId: string, action: BulkAction, folder: string, ids: string[], expandThreads = true, until?: string) =>
+		post<{ count: number }>(`/api/v1/mailboxes/${encodeURIComponent(mailboxId)}/emails/bulk`, { action, folder, ids, expandThreads, until }),
 	emptyJunk: (mailboxId: string) =>
 		post<{ count: number }>(`/api/v1/mailboxes/${encodeURIComponent(mailboxId)}/junk/empty`),
 	moveEmail: (mailboxId: string, id: string, folderId: string) =>
@@ -197,6 +199,12 @@ const api = {
 			draft_id?: string;
 		},
 	) => post<{ draft_id: string }>(`/api/v1/mailboxes/${mailboxId}/drafts`, draft),
+	scheduleEmail: (mailboxId: string, data: { mode: "new" | "reply" | "forward"; originalId?: string; draftId?: string; sendAt: string; email: unknown }) =>
+		post<{ id: string; sendAt: string }>(`/api/v1/mailboxes/${encodeURIComponent(mailboxId)}/scheduled`, data),
+	cancelScheduled: (mailboxId: string, id: string) =>
+		post<{ status: string }>(`/api/v1/mailboxes/${encodeURIComponent(mailboxId)}/scheduled/${encodeURIComponent(id)}/cancel`),
+	sendScheduledNow: (mailboxId: string, id: string) =>
+		post<{ status: string }>(`/api/v1/mailboxes/${encodeURIComponent(mailboxId)}/scheduled/${encodeURIComponent(id)}/send`),
 	replyToEmail: (mailboxId: string, emailId: string, email: unknown) =>
 		post<void>(`/api/v1/mailboxes/${mailboxId}/emails/${emailId}/reply`, email),
 	forwardEmail: (mailboxId: string, emailId: string, email: unknown) =>

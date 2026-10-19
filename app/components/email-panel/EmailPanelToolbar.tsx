@@ -1,5 +1,8 @@
-import { ArrowBendUpLeftIcon, ArrowBendUpRightIcon, ArrowLeftIcon, ArchiveIcon, DotsThreeVerticalIcon, EnvelopeOpenIcon, EnvelopeSimpleIcon, PaperPlaneTiltIcon, PencilSimpleIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
+import { ArrowBendUpLeftIcon, ArrowBendUpRightIcon, ArrowLeftIcon, ArchiveIcon, ClockCountdownIcon, ClockIcon, DotsThreeVerticalIcon, XCircleIcon, EnvelopeOpenIcon, EnvelopeSimpleIcon, PaperPlaneTiltIcon, PencilSimpleIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
+import { Folders } from "shared/folders";
+import { canSnooze, snoozePresets } from "shared/schedule-time";
+import DateTimePicker from "~/components/DateTimePicker";
 import type { Email, Folder } from "~/types";
 
 interface EmailPanelToolbarProps {
@@ -24,6 +27,12 @@ interface EmailPanelToolbarProps {
 	onMarkNotSpam: () => void;
 	onViewSource: () => void;
 	onDelete: () => void;
+	/** A UTC ISO time snoozes the conversation; null unsnoozes it. */
+	onSnooze: (until: string | null) => void;
+	isSnoozing: boolean;
+	onSendScheduledNow: () => void;
+	onCancelScheduled: () => void;
+	isScheduleBusy: boolean;
 }
 
 export default function EmailPanelToolbar(props: EmailPanelToolbarProps) {
@@ -38,6 +47,9 @@ export default function EmailPanelToolbar(props: EmailPanelToolbarProps) {
 		document.addEventListener("keydown", escape);
 		return () => { document.removeEventListener("mousedown", dismiss); document.removeEventListener("keydown", escape); };
 	}, [open]);
+	const [snoozeOpen, setSnoozeOpen] = useState(false);
+	const snoozeTrigger = useRef<HTMLButtonElement>(null);
+	const folderId = props.email.folder_id || Folders.INBOX;
 	const action = (callback: () => void) => { setOpen(false); callback(); };
 	return <div className="mail-reader-toolbar">
 		<button type="button" className="mail-icon-button" aria-label="Back to list" onClick={props.onBack}><ArrowLeftIcon size={24} /></button>
@@ -45,11 +57,19 @@ export default function EmailPanelToolbar(props: EmailPanelToolbarProps) {
 		{props.isDraftFolder ? <>
 			<button type="button" className="mail-icon-button" aria-label="Send draft" disabled={props.isSending} onClick={props.onSendDraft}><PaperPlaneTiltIcon size={22} /></button>
 			<button type="button" className="mail-icon-button" aria-label="Edit draft" onClick={props.onEditDraft}><PencilSimpleIcon size={22} /></button>
-		</> : props.email.folder_id !== "archive" && <button type="button" className="mail-icon-button" aria-label="Archive" onClick={() => props.onMove("archive")}><ArchiveIcon size={22} /></button>}
+		</> : folderId !== Folders.ARCHIVE && folderId !== Folders.SCHEDULED && <button type="button" className="mail-icon-button" aria-label="Archive" onClick={() => props.onMove("archive")}><ArchiveIcon size={22} /></button>}
+		{folderId === Folders.SCHEDULED && <>
+			<button type="button" className="mail-icon-button" aria-label="Send now" title="Send now" disabled={props.isScheduleBusy} onClick={props.onSendScheduledNow}><PaperPlaneTiltIcon size={22} /></button>
+			<button type="button" className="mail-icon-button" aria-label="Cancel scheduled send" title="Cancel send (back to Drafts)" disabled={props.isScheduleBusy} onClick={props.onCancelScheduled}><XCircleIcon size={22} /></button>
+		</>}
+		{folderId === Folders.SNOOZED
+			? <button type="button" className="mail-icon-button" aria-label="Unsnooze" title="Unsnooze" disabled={props.isSnoozing} onClick={() => props.onSnooze(null)}><ClockCountdownIcon size={22} /></button>
+			: !props.isDraftFolder && canSnooze(folderId) && <button ref={snoozeTrigger} type="button" className="mail-icon-button" aria-label="Snooze" title="Snooze" aria-expanded={snoozeOpen} onClick={() => { setOpen(false); setSnoozeOpen((value) => !value); }}><ClockIcon size={22} /></button>}
+		{snoozeOpen && <DateTimePicker title="Snooze until" confirmLabel="Snooze" presets={snoozePresets()} anchor={snoozeTrigger} onClose={() => setSnoozeOpen(false)} onPick={(date) => { setSnoozeOpen(false); props.onSnooze(date.toISOString()); }} />}
 		<button type="button" className="mail-icon-button" aria-label="Delete" onClick={props.onDelete}><TrashIcon size={22} /></button>
 		<button type="button" className="mail-icon-button" aria-label={props.email.read ? "Mark as unread" : "Mark as read"} onClick={props.onToggleRead}>{props.email.read ? <EnvelopeSimpleIcon size={22} /> : <EnvelopeOpenIcon size={22} />}</button>
 		<div ref={menu} className="relative">
-			<button ref={trigger} type="button" className="mail-icon-button" aria-label="More email actions" aria-expanded={open} onClick={() => setOpen((value) => !value)}><DotsThreeVerticalIcon size={24} /></button>
+			<button ref={trigger} type="button" className="mail-icon-button" aria-label="More email actions" aria-expanded={open} onClick={() => { setSnoozeOpen(false); setOpen((value) => !value); }}><DotsThreeVerticalIcon size={24} /></button>
 			{open && <div className="mail-reader-menu" role="group" aria-label="More email actions">
 				{!props.isDraftFolder && <><button type="button" onClick={() => action(props.onReply)}><ArrowBendUpLeftIcon size={18} />Reply</button><button type="button" onClick={() => action(props.onReplyAll)}>Reply all</button><button type="button" onClick={() => action(props.onForward)}><ArrowBendUpRightIcon size={18} />Forward</button></>}
 				<label className="block px-3 py-2 text-xs text-kumo-subtle">Move to<select aria-label="Move to folder" value="" onChange={(event) => { if (event.target.value) action(() => props.onMove(event.target.value)); }} className="mt-1 block w-full rounded border border-kumo-line bg-kumo-elevated p-2 text-sm text-kumo-default"><option value="" disabled>Choose a folder</option>{props.moveToFolders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>

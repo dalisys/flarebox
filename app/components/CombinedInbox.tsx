@@ -3,17 +3,19 @@
 //     https://opensource.org/licenses/Apache-2.0
 
 import { Button } from "@cloudflare/kumo";
-import { ArchiveIcon, ArrowsClockwiseIcon, EnvelopeOpenIcon, EnvelopeSimpleIcon, TrashIcon, TrayIcon } from "@phosphor-icons/react";
+import { ArchiveIcon, ArrowsClockwiseIcon, ClockCountdownIcon, ClockIcon, EnvelopeOpenIcon, EnvelopeSimpleIcon, TrashIcon, TrayIcon } from "@phosphor-icons/react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import SenderAvatar, { senderName } from "~/components/SenderAvatar";
 import EmailStarButton from "~/components/EmailStarButton";
 import { buildSearchQuery, parseSearchQuery, searchQueryParams } from "~/lib/search-parser";
-import { formatListDate } from "shared/dates";
+import { formatListDate, formatSnoozeDate } from "shared/dates";
+import { canSnooze, snoozePresets } from "shared/schedule-time";
+import DateTimePicker from "~/components/DateTimePicker";
 import { Folders, getFolderDisplayName } from "shared/folders";
 import { getSnippetText } from "~/lib/utils";
-import api from "~/services/api";
+import api, { type BulkAction } from "~/services/api";
 import type { Email, Mailbox } from "~/types";
 
 interface AccountMessages { mailboxId: string; emails: Email[]; totalCount: number; }
@@ -30,6 +32,8 @@ export default function CombinedInbox({ mailboxes, folder, onSelect }: { mailbox
 	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
+	const [snoozeOpen, setSnoozeOpen] = useState(false);
+	const snoozeButton = useRef<HTMLButtonElement>(null);
 	useEffect(() => { setPages(1); setSelectedKeys(new Set()); setError(""); }, [folder, activeQuery, unreadOnly, sort]);
 	const searching = searchParams.has("q") || unreadOnly;
 	const applySearch = (query: string) => {
@@ -74,7 +78,8 @@ export default function CombinedInbox({ mailboxes, folder, onSelect }: { mailbox
 	const isRefreshing = queries.some((query) => query.isFetching);
 	const emails = loaded.flatMap((item) => item.emails.map((email): CombinedEmail => ({ ...email, mailboxId: item.mailboxId })))
 		.sort((a, b) => {
-			const dateOrder = sort === "oldest" ? Date.parse(a.date) - Date.parse(b.date) : Date.parse(b.date) - Date.parse(a.date);
+			// sort_date puts mail that just woke from snooze at the top.
+			const dateOrder = sort === "oldest" ? Date.parse(a.date) - Date.parse(b.date) : Date.parse(b.sort_date || b.date) - Date.parse(a.sort_date || a.date);
 			if (searching && (sort === "sender" || sort === "subject")) return (a[sort] ?? "").toLowerCase().localeCompare((b[sort] ?? "").toLowerCase()) || dateOrder || a.id.localeCompare(b.id);
 			return dateOrder || a.id.localeCompare(b.id);
 		});
@@ -86,8 +91,9 @@ export default function CombinedInbox({ mailboxes, folder, onSelect }: { mailbox
 	const visibleKeys = visibleEmails.map(keyOf);
 	const selectedEmails = emails.filter((email) => selectedKeys.has(keyOf(email)));
 	const allVisibleSelected = visibleKeys.length > 0 && visibleKeys.every((key) => selectedKeys.has(key));
-	const runBulk = async (action: "archive" | "read" | "unread" | "delete") => {
+	const runBulk = async (action: BulkAction, until?: string) => {
 		if (!selectedEmails.length) return;
+		setSnoozeOpen(false);
 		if (action === "delete" && !window.confirm(`Delete ${selectedEmails.length} selected conversation${selectedEmails.length === 1 ? "" : "s"}? Messages in Trash will be permanently deleted.`)) return;
 		setBusy(true); setError("");
 		const groups = new Map<string, { mailboxId: string; folderId: string; ids: string[] }>();
@@ -98,7 +104,7 @@ export default function CombinedInbox({ mailboxes, folder, onSelect }: { mailbox
 			groups.get(key)!.ids.push(email.id);
 		}
 		const results = await Promise.allSettled([...groups.values()].flatMap(({ mailboxId, folderId, ids }) =>
-			Array.from({ length: Math.ceil(ids.length / 100) }, (_, index) => api.bulkEmails(mailboxId, action, folderId, ids.slice(index * 100, (index + 1) * 100), folder !== "activity" && !searching))));
+			Array.from({ length: Math.ceil(ids.length / 100) }, (_, index) => api.bulkEmails(mailboxId, action, folderId, ids.slice(index * 100, (index + 1) * 100), folder !== "activity" && !searching, until))));
 		await Promise.all([...new Set(selectedEmails.map((email) => email.mailboxId))].map((mailboxId) => Promise.all([
 			queryClient.invalidateQueries({ queryKey: ["combined-mail", mailboxId] }),
 			queryClient.invalidateQueries({ queryKey: ["emails", mailboxId] }),
@@ -136,12 +142,15 @@ export default function CombinedInbox({ mailboxes, folder, onSelect }: { mailbox
 		{(visibleEmails.length > 0 || selectedKeys.size > 0) && <div className={`mail-selection-toolbar ${selectedKeys.size ? "has-selection" : ""} flex flex-wrap items-center gap-2 border-b border-kumo-line px-4 py-2`}>
 			<label className="flex items-center gap-2 text-sm text-kumo-subtle"><input type="checkbox" aria-label="Select all visible messages" checked={allVisibleSelected} onChange={() => setSelectedKeys((current) => { const next = new Set(current); if (allVisibleSelected) visibleKeys.forEach((key) => next.delete(key)); else visibleKeys.forEach((key) => next.add(key)); return next; })} />{selectedKeys.size ? `${selectedKeys.size} selected` : "Select visible"}</label>
 			{selectedKeys.size > 0 && <div className="ml-auto flex flex-wrap items-center gap-1">
-				{folder !== Folders.ARCHIVE && folder !== Folders.TRASH && <Button variant="ghost" size="sm" icon={<ArchiveIcon size={16} />} disabled={busy} onClick={() => runBulk("archive")}>Archive</Button>}
+				{folder !== Folders.ARCHIVE && folder !== Folders.TRASH && folder !== Folders.SCHEDULED && <Button variant="ghost" size="sm" icon={<ArchiveIcon size={16} />} disabled={busy} onClick={() => runBulk("archive")}>Archive</Button>}
 				<Button variant="ghost" size="sm" icon={<EnvelopeOpenIcon size={16} />} disabled={busy} onClick={() => runBulk("read")}>Mark read</Button>
 				<Button variant="ghost" size="sm" icon={<EnvelopeSimpleIcon size={16} />} disabled={busy} onClick={() => runBulk("unread")}>Mark unread</Button>
+				{!searching && canSnooze(folder) && <Button ref={snoozeButton} variant="ghost" size="sm" icon={<ClockIcon size={16} />} disabled={busy} aria-expanded={snoozeOpen} onClick={() => setSnoozeOpen(true)}>Snooze</Button>}
+				{!searching && folder === Folders.SNOOZED && <Button variant="ghost" size="sm" icon={<ClockCountdownIcon size={16} />} disabled={busy} onClick={() => runBulk("unsnooze")}>Unsnooze</Button>}
 				<Button variant="ghost" size="sm" icon={<TrashIcon size={16} />} disabled={busy} onClick={() => runBulk("delete")}>Delete</Button>
 				<Button variant="ghost" size="sm" onClick={() => setSelectedKeys(new Set())}>Clear</Button>
 			</div>}
+			{snoozeOpen && <DateTimePicker title="Snooze until" confirmLabel="Snooze" presets={snoozePresets()} anchor={snoozeButton} onClose={() => setSnoozeOpen(false)} onPick={(date) => runBulk("snooze", date.toISOString())} />}
 		</div>}
 		{hasError && <p role="alert" className="border-b border-kumo-line px-4 py-2 text-sm text-kumo-destructive">Some accounts could not be searched or loaded. Refresh to try again.</p>}
 		{error && <p role="alert" className="border-b border-kumo-line px-4 py-2 text-sm text-kumo-destructive">{error}</p>}
@@ -149,13 +158,13 @@ export default function CombinedInbox({ mailboxes, folder, onSelect }: { mailbox
 			{isLoading && loaded.length === 0 ? <p className="p-8 text-sm text-kumo-subtle">Loading messages…</p> : visibleEmails.length === 0 ? <div className="flex flex-col items-center justify-center px-6 py-16 text-center text-kumo-subtle"><TrayIcon size={32} weight="thin" /><p className="mt-2 text-sm">{searching ? "No matching messages" : "No messages yet"}</p></div> : visibleEmails.map((email) => {
 				const unread = email.thread_unread_count !== undefined ? email.thread_unread_count > 0 : !email.read;
 				const emailFolder = folder === "activity" || searching ? email.folder_id || "inbox" : folder;
-				const sender = folder === "sent" || folder === "draft" ? email.recipient : email.sender;
+				const sender = folder === "sent" || folder === "draft" || folder === Folders.SCHEDULED ? email.recipient : email.sender;
 				return <div key={keyOf(email)} className={`mail-message-row ${unread ? "is-unread" : ""} ${selectedKeys.has(keyOf(email)) ? "is-checked" : ""}`}>
 					<input type="checkbox" aria-label={`Select ${email.subject || "message"} in ${email.mailboxId}`} checked={selectedKeys.has(keyOf(email))} onChange={() => setSelectedKeys((current) => { const next = new Set(current); const key = keyOf(email); if (next.has(key)) next.delete(key); else next.add(key); return next; })} className="mail-row-checkbox" />
 					<button type="button" onClick={() => onSelect({ id: email.id, mailboxId: email.mailboxId, folder: emailFolder }, visibleEmails.map((item) => ({ id: item.id, mailboxId: item.mailboxId, folder: folder === "activity" || searching ? item.folder_id || "inbox" : folder })))} className="mail-message-open flex min-w-0 flex-1 items-start gap-4 text-left">
 						<SenderAvatar sender={sender} />
 						<span className="min-w-0 flex-1">
-							<span className="flex min-w-0 items-center gap-2"><span className="mail-message-sender truncate">{senderName(sender)}</span>{(email.thread_count ?? 1) > 1 && <span className="text-xs text-kumo-subtle">{email.thread_count}</span>}<span className="mail-message-date ml-auto shrink-0">{formatListDate(email.date)}</span></span>
+							<span className="flex min-w-0 items-center gap-2"><span className="mail-message-sender truncate">{senderName(sender)}</span>{(email.thread_count ?? 1) > 1 && <span className="text-xs text-kumo-subtle">{email.thread_count}</span>}<span className="mail-message-date ml-auto shrink-0">{email.folder_id === Folders.SCHEDULED && email.send_at ? <>{email.send_error && <span className="mr-1 font-medium text-kumo-danger" title={email.send_error}>Failed ·</span>}Sends {formatSnoozeDate(email.send_at)}</> : email.folder_id === Folders.SNOOZED && email.snoozed_until ? `Until ${formatSnoozeDate(email.snoozed_until)}` : formatListDate(email.date)}</span></span>
 							<span className="mail-message-subject block truncate">{email.subject || "(no subject)"}</span>
 							<span className="mail-message-snippet block truncate">{getSnippetText(email.snippet)}</span>
 							<span className="mail-message-account block truncate">{email.mailboxId}{(folder === "activity" || searching) ? ` · ${getFolderDisplayName(emailFolder)}` : ""}</span>

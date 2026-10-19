@@ -21,6 +21,7 @@ import { replySubject } from "./lib/auto-draft";
 import { SendEmailRequestSchema } from "./lib/schemas";
 import { handleReplyEmail, handleForwardEmail } from "./routes/reply-forward";
 import { Folders } from "../shared/folders";
+import { canSnooze } from "../shared/schedule-time";
 import type { Env } from "./types";
 import { requireMailbox, type MailboxContext } from "./lib/mailbox";
 import { FiltersSchema, FilterRuleSchema, filtersKey, findMatchingRule, toFilterMessage, type FilterRule } from "./lib/filters";
@@ -56,11 +57,13 @@ const DraftBody = z.object({
 });
 
 const BulkEmailBody = z.object({
-	action: z.enum(["archive", "read", "unread", "delete"]),
+	action: z.enum(["archive", "read", "unread", "delete", "snooze", "unsnooze"]),
 	folder: z.string().min(1),
 	ids: z.array(z.string().min(1)).min(1).max(100).optional(),
 	expandThreads: z.boolean().optional(),
+	until: z.string().datetime({ offset: true }).optional(),
 });
+
 
 // -- Helpers --------------------------------------------------------
 
@@ -417,7 +420,15 @@ app.post("/api/v1/mailboxes/:mailboxId/finalize-delete", async (c) => {
 app.post("/api/v1/mailboxes/:mailboxId/emails/bulk", async (c: AppContext) => {
 	const parsed = BulkEmailBody.safeParse(await c.req.json());
 	if (!parsed.success || !parsed.data.ids) return c.json({ error: "Select up to 100 messages" }, 400);
-	const { count, attachments } = await c.var.mailboxStub.bulkEmails(parsed.data.action, parsed.data.folder, parsed.data.ids, parsed.data.expandThreads);
+	const { action, folder, until } = parsed.data;
+	let snoozeUntil: string | undefined;
+	if (action === "snooze") {
+		if (!canSnooze(folder)) return c.json({ error: "Mail in this folder cannot be snoozed" }, 400);
+		if (!until || Date.parse(until) <= Date.now()) return c.json({ error: "Choose a time in the future" }, 400);
+		snoozeUntil = new Date(until).toISOString();
+	}
+	if (action === "unsnooze" && folder !== Folders.SNOOZED) return c.json({ error: "Only snoozed mail can be unsnoozed" }, 400);
+	const { count, attachments } = await c.var.mailboxStub.bulkEmails(action, folder, parsed.data.ids, parsed.data.expandThreads, snoozeUntil, decodeURIComponent(c.req.param("mailboxId")!));
 	for (let i = 0; i < attachments.length; i += 1000) await c.env.BUCKET.delete(attachments.slice(i, i + 1000));
 	return c.json({ count });
 });
@@ -500,6 +511,59 @@ app.post("/api/v1/mailboxes/:mailboxId/emails", async (c: AppContext) => {
 		}).catch((e) => console.error("Deferred email delivery failed:", (e as Error).message)),
 	);
 	return c.json({ id: messageId, status: "sent" }, 202);
+});
+
+// -- Scheduled send -------------------------------------------------
+
+const ScheduleBody = z.object({
+	mode: z.enum(["new", "reply", "forward"]),
+	originalId: z.string().min(1).optional(),
+	draftId: z.string().min(1).optional(),
+	sendAt: z.string().datetime({ offset: true }),
+	email: SendEmailRequestSchema,
+});
+const MAX_SCHEDULE_MS = 366 * 24 * 60 * 60 * 1000;
+
+app.post("/api/v1/mailboxes/:mailboxId/scheduled", async (c: AppContext) => {
+	const mailboxId = decodeURIComponent(c.req.param("mailboxId")!);
+	const parsed = ScheduleBody.safeParse(await c.req.json().catch(() => null));
+	if (!parsed.success) return c.json({ error: parsed.error.issues.some((issue) => issue.message.includes("'html' or 'text'")) ? "Write a message first" : "Check the recipients and the send time" }, 400);
+	const { mode, originalId, draftId, sendAt, email } = parsed.data;
+	const sendTime = Date.parse(sendAt);
+	if (sendTime <= Date.now() || sendTime > Date.now() + MAX_SCHEDULE_MS) return c.json({ error: "Choose a time in the next 12 months" }, 400);
+	let toStr: string, fromEmail: string;
+	try {
+		({ toStr, fromEmail } = validateSender(email.to, email.from, mailboxId));
+	} catch (e) {
+		if (e instanceof SenderValidationError) return c.json({ error: e.message }, 400);
+		throw e;
+	}
+	const stub = c.var.mailboxStub;
+	const original = mode === "new" ? null : originalId ? await stub.getEmail(originalId) : null;
+	if (mode !== "new" && !original) return c.json({ error: "Original email not found" }, 404);
+	// The same body is posted to the normal send route when the time comes.
+	const path = mode === "new" ? "/emails" : `/emails/${encodeURIComponent(originalId!)}/${mode}`;
+	const sendRequest = JSON.stringify({ path, body: JSON.stringify(email) });
+	if (sendRequest.length > 1_000_000) return c.json({ error: "This message is too large to schedule" }, 413);
+	const id = crypto.randomUUID();
+	const list = (value?: string | string[]) => value ? (Array.isArray(value) ? value.join(", ") : value).toLowerCase() : null;
+	await stub.scheduleEmail({
+		id, subject: email.subject, sender: fromEmail, recipient: toStr, cc: list(email.cc), bcc: list(email.bcc),
+		body: email.html || email.text || "", in_reply_to: original?.id ?? null,
+		thread_id: original?.thread_id || email.thread_id || id,
+		send_at: new Date(sendTime).toISOString(), send_request: sendRequest,
+	}, mailboxId);
+	if (draftId) await stub.deleteEmail(draftId);
+	return c.json({ id, sendAt: new Date(sendTime).toISOString() }, 201);
+});
+
+app.post("/api/v1/mailboxes/:mailboxId/scheduled/:id/cancel", async (c: AppContext) => {
+	return await c.var.mailboxStub.cancelScheduled(c.req.param("id")!) ? c.json({ status: "draft" }) : c.json({ error: "Scheduled message not found" }, 404);
+});
+
+app.post("/api/v1/mailboxes/:mailboxId/scheduled/:id/send", async (c: AppContext) => {
+	const result = await c.var.mailboxStub.sendScheduledNow(c.req.param("id")!);
+	return "error" in result ? c.json(result, 502) : c.json({ status: "sent" });
 });
 
 app.post("/api/v1/mailboxes/:mailboxId/drafts", async (c: AppContext) => {

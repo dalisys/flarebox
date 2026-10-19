@@ -3,9 +3,11 @@
 //     https://opensource.org/licenses/Apache-2.0
 
 import { Banner } from "@cloudflare/kumo";
-import { ArrowLeftIcon, CaretDownIcon, DotsThreeVerticalIcon, FloppyDiskIcon, PaperPlaneTiltIcon, SparkleIcon, TextAaIcon, TrashIcon } from "@phosphor-icons/react";
+import { ArrowLeftIcon, CalendarPlusIcon, CaretDownIcon, DotsThreeVerticalIcon, FloppyDiskIcon, PaperPlaneTiltIcon, SparkleIcon, TextAaIcon, TrashIcon } from "@phosphor-icons/react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useParams } from "react-router";
+import { sendLaterPresets } from "shared/schedule-time";
+import DateTimePicker from "~/components/DateTimePicker";
 import { useComposeForm } from "~/hooks/useComposeForm";
 import { useAiEnabled } from "~/queries/mailboxes";
 import RichTextEditor from "./RichTextEditor";
@@ -37,6 +39,7 @@ export default function ComposePanel({ mailboxId: mailboxOverride }: { mailboxId
 		formTitle,
 		handleSaveDraft,
 		handleSend,
+		handleSendLater,
 		closeCompose,
 		closePanel,
 		senderMailboxId, setSenderMailboxId, senderLocked, mailboxes,
@@ -49,6 +52,8 @@ export default function ComposePanel({ mailboxId: mailboxOverride }: { mailboxId
 	const busy = isSending || isWriting;
 	const [showFormatting, setShowFormatting] = useState(false);
 	const [menuOpen, setMenuOpen] = useState(false);
+	const [laterOpen, setLaterOpen] = useState(false);
+	const laterButton = useRef<HTMLButtonElement>(null);
 	const menuRef = useRef<HTMLDivElement>(null);
 	const menuButton = useRef<HTMLButtonElement>(null);
 	useEffect(() => {
@@ -68,6 +73,8 @@ export default function ComposePanel({ mailboxId: mailboxOverride }: { mailboxId
 				<div className="flex-1" />
 				{aiEnabled && <button type="button" className="mail-icon-button" aria-label="Write with AI" aria-expanded={showAi} aria-controls={`${fieldId}-ai`} aria-pressed={showAi} disabled={busy} onClick={() => setShowAi((shown) => !shown)}><SparkleIcon size={24} /></button>}
 				<button type="button" className="mail-icon-button" aria-label="Formatting options" aria-expanded={showFormatting} aria-controls={`${fieldId}-formatting`} aria-pressed={showFormatting} disabled={isSending} onClick={() => setShowFormatting((shown) => !shown)}><TextAaIcon size={24} /></button>
+				<button ref={laterButton} type="button" className="mail-icon-button" aria-label="Send later" title="Send later" aria-expanded={laterOpen} disabled={isSending || isSavingDraft || !senderMailboxId} onClick={(event) => { if (event.currentTarget.form?.reportValidity()) setLaterOpen(true); }}><CalendarPlusIcon size={24} /></button>
+				{laterOpen && <DateTimePicker title="Send later" confirmLabel="Schedule send" presets={sendLaterPresets()} anchor={laterButton} onClose={() => setLaterOpen(false)} onPick={(date) => { setLaterOpen(false); handleSendLater(date, closePanel); }} />}
 				<button type="submit" className="mail-icon-button mail-composer-send" aria-label={isSending ? "Sending email" : "Send"} disabled={isSending || isSavingDraft || !senderMailboxId} aria-busy={isSending}><PaperPlaneTiltIcon size={25} /></button>
 				<div className="relative" ref={menuRef}>
 					<button ref={menuButton} type="button" className="mail-icon-button" aria-label="More compose actions" aria-expanded={menuOpen} disabled={isSending} onClick={() => setMenuOpen((shown) => !shown)}><DotsThreeVerticalIcon size={24} /></button>

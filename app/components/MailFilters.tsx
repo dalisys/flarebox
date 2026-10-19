@@ -26,7 +26,7 @@ export default function MailFilters({ mailboxId }: { mailboxId: string }) {
 	// The app calls the spam folder Junk.
 	const folderName = (id: string) => (id === "spam" ? "Junk" : folders.find((f) => f.id === id)?.name) || (folders.length ? `${id} (missing folder, mail stays in Inbox)` : id);
 	// Mail cannot be filtered into Sent or Drafts; Inbox is where it already goes.
-	const targetFolders = folders.filter((f) => !["inbox", "sent", "draft"].includes(f.id));
+	const targetFolders = folders.filter((f) => !["inbox", "sent", "draft", "snoozed", "scheduled"].includes(f.id));
 
 	const save = async (next: FilterRule[], message: string) => {
 		setBusy(true);

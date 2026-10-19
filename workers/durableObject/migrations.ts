@@ -177,4 +177,29 @@ export const mailboxMigrations: Migration[] = [
 		name: "10_add_message_id_index",
 		sql: `CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails(message_id);`,
 	},
+	{
+		// snoozed_until: wake time (UTC ISO) while in the Snoozed folder.
+		// woke_at: last wake time, so woken mail sorts to the top of the Inbox.
+		name: "11_add_snooze",
+		sql: txn(`
+            ALTER TABLE emails ADD COLUMN snoozed_until TEXT;
+            ALTER TABLE emails ADD COLUMN woke_at TEXT;
+            INSERT OR IGNORE INTO folders (id, name, is_deletable) VALUES ('snoozed', 'Snoozed', 0);
+            UPDATE folders SET is_deletable = 0 WHERE id = 'snoozed';
+            CREATE INDEX IF NOT EXISTS idx_emails_folder_snoozed ON emails(folder_id, snoozed_until);
+        `),
+	},
+	{
+		// send_at: when a message in the Scheduled folder is sent (UTC ISO).
+		// send_request: the saved send call ({ path, body }) replayed at that time.
+		name: "12_add_scheduled_send",
+		sql: txn(`
+            ALTER TABLE emails ADD COLUMN send_at TEXT;
+            ALTER TABLE emails ADD COLUMN send_request TEXT;
+            ALTER TABLE emails ADD COLUMN send_error TEXT;
+            ALTER TABLE emails ADD COLUMN send_attempts INTEGER NOT NULL DEFAULT 0;
+            INSERT OR IGNORE INTO folders (id, name, is_deletable) VALUES ('scheduled', 'Scheduled', 0);
+            UPDATE folders SET is_deletable = 0 WHERE id = 'scheduled';
+        `),
+	},
 ];

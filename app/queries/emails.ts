@@ -3,7 +3,7 @@
 //     https://opensource.org/licenses/Apache-2.0
 
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import api from "~/services/api";
+import api, { type BulkAction } from "~/services/api";
 import { mapCachedEmail, restoreEmailFields } from "~/lib/email-cache";
 import type { Email } from "~/types";
 import { queryKeys } from "./keys";
@@ -214,9 +214,9 @@ export function useDeleteEmail() {
 export function useBulkEmails() {
 	const invalidate = useInvalidateEmailData();
 	return useMutation({
-		mutationFn: async ({ mailboxId, action, folder, ids, expandThreads = true }: { mailboxId: string; action: "archive" | "read" | "unread" | "delete"; folder: string; ids: string[]; expandThreads?: boolean }) => {
+		mutationFn: async ({ mailboxId, action, folder, ids, expandThreads = true, until }: { mailboxId: string; action: BulkAction; folder: string; ids: string[]; expandThreads?: boolean; until?: string }) => {
 			let count = 0;
-			for (let i = 0; i < ids.length; i += 100) count += (await api.bulkEmails(mailboxId, action, folder, ids.slice(i, i + 100), expandThreads)).count;
+			for (let i = 0; i < ids.length; i += 100) count += (await api.bulkEmails(mailboxId, action, folder, ids.slice(i, i + 100), expandThreads, until)).count;
 			return count;
 		},
 		onSettled: (_data, _error, { mailboxId }) => invalidate(mailboxId),
@@ -310,5 +310,22 @@ export function useForwardEmail() {
 		}: { mailboxId: string; emailId: string; email: unknown }) =>
 			api.forwardEmail(mailboxId, emailId, email),
 		onSuccess: (_data, { mailboxId }) => invalidate(mailboxId),
+	});
+}
+
+export function useScheduledAction() {
+	const invalidate = useInvalidateEmailData();
+	return useMutation({
+		mutationFn: ({ mailboxId, id, action }: { mailboxId: string; id: string; action: "cancel" | "send" }) =>
+			action === "cancel" ? api.cancelScheduled(mailboxId, id) : api.sendScheduledNow(mailboxId, id),
+		onSettled: (_data, _error, { mailboxId }) => invalidate(mailboxId),
+	});
+}
+
+export function useScheduleEmail() {
+	const invalidate = useInvalidateEmailData();
+	return useMutation({
+		mutationFn: ({ mailboxId, data }: { mailboxId: string; data: Parameters<typeof api.scheduleEmail>[1] }) => api.scheduleEmail(mailboxId, data),
+		onSettled: (_data, _error, { mailboxId }) => invalidate(mailboxId),
 	});
 }
