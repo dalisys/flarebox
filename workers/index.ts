@@ -20,6 +20,7 @@ import { handleReplyEmail, handleForwardEmail } from "./routes/reply-forward";
 import { Folders } from "../shared/folders";
 import type { Env } from "./types";
 import { requireMailbox, type MailboxContext } from "./lib/mailbox";
+import { FiltersSchema, FilterRuleSchema, filtersKey, findMatchingRule, toFilterMessage, type FilterRule } from "./lib/filters";
 import { canTrustedSenderOverride, classifySpam, isAuthenticatedSender, senderDomain, domainBlockKey, type SpamSettings } from "./lib/spam";
 import { writeEmail } from "./lib/ai";
 import { scanWithRspamd, type RspamdAction } from "./lib/rspamd";
@@ -268,6 +269,29 @@ app.delete("/api/v1/mailboxes/:mailboxId/trusted-senders/:address", async (c: Ap
 	return removed ? c.body(null, 204) : c.json({ error: "Trusted sender not found" }, 404);
 });
 
+async function loadFilters(env: Env, mailboxId: string): Promise<FilterRule[]> {
+	const obj = await env.BUCKET.get(filtersKey(mailboxId));
+	return obj ? FiltersSchema.parse(await obj.json()).rules : [];
+}
+
+app.get("/api/v1/mailboxes/:mailboxId/filters", async (c: AppContext) => {
+	return c.json({ rules: await loadFilters(c.env, c.req.param("mailboxId")!) });
+});
+
+app.put("/api/v1/mailboxes/:mailboxId/filters", async (c: AppContext) => {
+	const parsed = FiltersSchema.safeParse(await c.req.json().catch(() => null));
+	if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message || "Invalid filters" }, 400);
+	await c.env.BUCKET.put(filtersKey(c.req.param("mailboxId")!), JSON.stringify(parsed.data));
+	return c.json(parsed.data);
+});
+
+app.post("/api/v1/mailboxes/:mailboxId/filters/apply", async (c: AppContext) => {
+	const parsed = FilterRuleSchema.safeParse(await c.req.json().catch(() => null));
+	if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message || "Invalid filter" }, 400);
+	const result = await c.var.mailboxStub.applyFilterRule(parsed.data);
+	return "error" in result ? c.json({ error: "Folder not found" }, 400) : c.json(result);
+});
+
 app.delete("/api/v1/mailboxes/:mailboxId", async (c) => {
 	return c.json({ error: "Choose move or export from the mailbox management screen before deleting" }, 400);
 });
@@ -378,6 +402,7 @@ app.post("/api/v1/mailboxes/:mailboxId/finalize-delete", async (c) => {
 		await stub.purgeMailboxData(true);
 		await c.env.BUCKET.delete(`mailboxes/${mailboxId}.json`);
 		await c.env.BUCKET.delete(`config/completed-exports/${mailboxId}.json`);
+		await c.env.BUCKET.delete(filtersKey(mailboxId));
 		await clearMailboxOperation(c.env, mailboxId);
 		return c.body(null, 204);
 	} catch (error) { return c.json({ error: (error as Error).message }, 502); }
@@ -737,11 +762,37 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: 
 
 	const originalMessageId = parsedEmail.messageId ? extractMsgId(parsedEmail.messageId) : null;
 
-	await stub.createEmail(classification.spam ? Folders.SPAM : Folders.INBOX, {
+	// Mail filters run on non-spam mail only. A filter error must never throw: Cloudflare would retry and store the email twice.
+	let folder: string = classification.spam ? Folders.SPAM : Folders.INBOX;
+	let read = false;
+	let starred = false;
+	if (!classification.spam) {
+		try {
+			const rule = findMatchingRule(await loadFilters(env, mailboxId), toFilterMessage({
+				sender: parsedEmail.from?.address, recipient: [...allRecipients, ...ccRecipients].join(", ") || envelopeRecipient,
+				subject: parsedEmail.subject, body: parsedEmail.text || parsedEmail.html,
+			}));
+			if (rule) {
+				const target = rule.actions.folder;
+				if (target && (await stub.getFolders()).some((f) => f.id === target)) folder = target;
+				else if (target) console.error("Mail filter folder not found; keeping message in Inbox:", messageId, target);
+				read = !!rule.actions.markRead;
+				starred = !!rule.actions.star;
+				console.info("Mail filter matched", JSON.stringify({ messageId, rule: rule.id, folder }));
+			}
+		} catch (error) {
+			console.error("Mail filter failed; keeping message in Inbox:", messageId, error instanceof Error ? error.message : "Unknown error");
+		}
+		// Filtered to Junk: treat as spam so it is not forwarded, drafted, or pushed.
+		if (folder === Folders.SPAM) classification = { ...classification, spam: true, reasons: ["Mail filter"] };
+	}
+
+	await stub.createEmail(folder, {
 		id: messageId, subject: parsedEmail.subject || "",
 		sender: (parsedEmail.from?.address || "").toLowerCase(), recipient: allRecipients.join(", ") || envelopeRecipient || mailboxId,
 		cc: ccRecipients.join(", ") || null, bcc: bccRecipients.join(", ") || null,
 		date: new Date().toISOString(), // uses receive time, not the email's Date header
+		read, starred,
 		body: parsedEmail.html || parsedEmail.text || "",
 		in_reply_to: inReplyTo, email_references: emailReferences.length > 0 ? JSON.stringify(emailReferences) : null,
 		thread_id: threadId, message_id: originalMessageId, raw_headers: JSON.stringify(parsedEmail.headers),

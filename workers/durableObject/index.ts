@@ -3,6 +3,7 @@
 //     https://opensource.org/licenses/Apache-2.0
 
 import { buildSearchConditions, type SearchFilterOptions } from "../lib/search";
+import { ruleMatches, toFilterMessage, type FilterRule } from "../lib/filters";
 import { DurableObject } from "cloudflare:workers";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { eq, and, or, asc, desc, sql } from "drizzle-orm";
@@ -691,6 +692,24 @@ export class MailboxDO extends DurableObject<Env> {
 			.run();
 
 		return true;
+	}
+
+	/** Run one filter rule over Inbox mail. Returns how many messages matched. */
+	applyFilterRule(rule: FilterRule): { matched: number } | { error: "folder_not_found" } {
+		const { folder, markRead, star } = rule.actions;
+		if (folder && ![...this.ctx.storage.sql.exec("SELECT 1 FROM folders WHERE id = ? LIMIT 1", folder)].length) return { error: "folder_not_found" };
+		const ids: string[] = [];
+		for (const row of this.ctx.storage.sql.exec("SELECT id, sender, recipient, subject, body FROM emails WHERE folder_id = ?", Folders.INBOX)) {
+			if (ruleMatches({ ...rule, enabled: true }, toFilterMessage(row as { sender: string; recipient: string; subject: string; body: string }))) ids.push(String(row.id));
+		}
+		this.ctx.storage.transactionSync(() => {
+			for (const id of ids) {
+				if (folder) this.ctx.storage.sql.exec("UPDATE emails SET folder_id = ? WHERE id = ?", folder, id);
+				if (markRead) this.ctx.storage.sql.exec("UPDATE emails SET read = 1 WHERE id = ?", id);
+				if (star) this.ctx.storage.sql.exec("UPDATE emails SET starred = 1 WHERE id = ?", id);
+			}
+		});
+		return { matched: ids.length };
 	}
 
 	getTrustedSenders(): string[] {

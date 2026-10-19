@@ -2,7 +2,7 @@
 // Licensed under the Apache 2.0 license found in the LICENSE file or at:
 //     https://opensource.org/licenses/Apache-2.0
 
-import type { Email, Folder, Mailbox } from "~/types";
+import type { Email, FilterRule, Folder, Mailbox } from "~/types";
 
 const REQUEST_TIMEOUT_MS = 30_000;
 
@@ -145,6 +145,12 @@ const api = {
 		get<{ senders: string[] }>(`/api/v1/mailboxes/${encodeURIComponent(mailboxId)}/trusted-senders`, { signal }),
 	removeTrustedSender: (mailboxId: string, address: string) =>
 		del<void>(`/api/v1/mailboxes/${mailboxId}/trusted-senders/${encodeURIComponent(address)}`),
+	getFilters: (mailboxId: string) =>
+		get<{ rules: FilterRule[] }>(`/api/v1/mailboxes/${encodeURIComponent(mailboxId)}/filters`),
+	saveFilters: (mailboxId: string, rules: FilterRule[]) =>
+		put<{ rules: FilterRule[] }>(`/api/v1/mailboxes/${encodeURIComponent(mailboxId)}/filters`, { rules }),
+	applyFilter: (mailboxId: string, rule: FilterRule) =>
+		post<{ matched: number }>(`/api/v1/mailboxes/${encodeURIComponent(mailboxId)}/filters/apply`, rule),
 	retireMailbox: (mailboxId: string, operation: { mode: "export" } | { mode: "move"; target: string }) =>
 		post<{ retired: boolean; ruleCleanup: "removed" | "manual" }>(`/api/v1/mailboxes/${encodeURIComponent(mailboxId)}/retire`, operation),
 	moveMailbox: (mailboxId: string, target: string, cursor?: string) => post<{ done: boolean; cursor?: string; copied: number }>(`/api/v1/mailboxes/${encodeURIComponent(mailboxId)}/move`, { target, cursor }),

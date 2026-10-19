@@ -131,6 +131,7 @@ npm run dev
 - [Accounts and domains](docs/accounts-and-domains.md): addresses, domains, subdomains, catch-all, forwarding, export
 - [Inbox and search](docs/inbox-and-search.md): search operators, filters, push
 - [Spam filtering](docs/spam-filtering.md): junk filter, Rspamd
+- [Mail filters](docs/filters.md): rules that move, star, or mark new mail as read
 
 ---
 
