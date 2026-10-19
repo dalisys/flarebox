@@ -773,6 +773,7 @@ export class MailboxDO extends DurableObject<Env> {
 	 * True when the thread has no messages yet, or the address already sent,
 	 * received, or was copied on one of them. Reply headers are set by the
 	 * sender, so a stranger must not join someone else's conversation.
+	 * INSTR, not LIKE: a sender address with % or _ must not act as a wildcard.
 	 */
 	async canJoinThread(threadId: string, address: string): Promise<boolean> {
 		const value = address.toLowerCase().trim();
@@ -780,8 +781,8 @@ export class MailboxDO extends DurableObject<Env> {
 			`SELECT
 				COUNT(*) AS total,
 				SUM(CASE WHEN LOWER(sender) = ?
-					OR (', ' || LOWER(COALESCE(recipient, '')) || ',') LIKE '%, ' || ? || ',%'
-					OR (', ' || LOWER(COALESCE(cc, '')) || ',') LIKE '%, ' || ? || ',%'
+					OR INSTR(', ' || LOWER(COALESCE(recipient, '')) || ',', ', ' || ? || ',') > 0
+					OR INSTR(', ' || LOWER(COALESCE(cc, '')) || ',', ', ' || ? || ',') > 0
 				THEN 1 ELSE 0 END) AS matches
 			 FROM emails WHERE thread_id = ?`,
 			value, value, value, threadId,
