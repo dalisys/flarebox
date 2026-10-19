@@ -14,6 +14,21 @@ export function canTrustedSenderOverride(action?: string, scannerUnavailable = f
 	return !scannerUnavailable && (action === undefined || action === "greylist" || action === "add header" || action === "rewrite subject");
 }
 
+const domainOf = (address?: string) => (address || "").trim().toLowerCase().split("@")[1] || "";
+/** Relaxed DMARC-style alignment: same domain or one is a subdomain of the other. */
+const aligned = (a: string, b: string) => a.includes(".") && b.includes(".") && (a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`));
+
+/**
+ * The header From can be forged, so a trusted-sender override needs proof the sender owns it:
+ * the envelope MAIL FROM must align with the header From, and Rspamd must report a DMARC pass.
+ * Authentication-Results headers in the message are not used: the sender can write them.
+ * No Rspamd verdict means no proof, so the message stays in Junk.
+ */
+export function isAuthenticatedSender(input: { headerFrom?: string; envelopeFrom?: string; rspamdSymbols?: string[] }): boolean {
+	const from = domainOf(input.headerFrom);
+	return !!from && aligned(domainOf(input.envelopeFrom), from) && !!input.rspamdSymbols?.includes("DMARC_POLICY_ALLOW");
+}
+
 interface IncomingMessage {
 	from?: { address?: string };
 	replyTo?: { address?: string }[];

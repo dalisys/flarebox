@@ -15,7 +15,10 @@ export type RspamdAction = "no action" | "greylist" | "add header" | "rewrite su
 export interface RspamdVerdict {
 	action: RspamdAction;
 	score: number;
+	/** Top-scoring symbols, for logs. */
 	symbols: { name: string; score: number }[];
+	/** Every symbol name, including negative ones such as DMARC_POLICY_ALLOW. */
+	symbolNames: string[];
 }
 
 const actions = new Set<RspamdAction>(["no action", "greylist", "add header", "rewrite subject", "soft reject", "reject", "quarantine", "discard"]);
@@ -69,13 +72,14 @@ export async function scanWithRspamd(
 		if (verdict.is_skipped === true || !actions.has(verdict.action as RspamdAction) || typeof verdict.score !== "number" || !Number.isFinite(verdict.score)) {
 			throw new Error("Invalid or skipped Rspamd verdict");
 		}
-		const symbols = verdict.symbols && typeof verdict.symbols === "object" && !Array.isArray(verdict.symbols)
-			? Object.entries(verdict.symbols).flatMap(([name, value]) => {
+		const symbolMap = verdict.symbols && typeof verdict.symbols === "object" && !Array.isArray(verdict.symbols) ? verdict.symbols : undefined;
+		const symbols = symbolMap
+			? Object.entries(symbolMap).flatMap(([name, value]) => {
 				if (!value || typeof value !== "object" || typeof (value as { score?: unknown }).score !== "number") return [];
 				return [{ name, score: (value as { score: number }).score }];
 			}).sort((a, b) => b.score - a.score).slice(0, 8)
 			: [];
-		return { action: verdict.action as RspamdAction, score: verdict.score, symbols };
+		return { action: verdict.action as RspamdAction, score: verdict.score, symbols, symbolNames: symbolMap ? Object.keys(symbolMap) : [] };
 	} finally {
 		clearTimeout(timeout);
 	}

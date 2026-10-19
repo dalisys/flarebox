@@ -20,7 +20,7 @@ import { handleReplyEmail, handleForwardEmail } from "./routes/reply-forward";
 import { Folders } from "../shared/folders";
 import type { Env } from "./types";
 import { requireMailbox, type MailboxContext } from "./lib/mailbox";
-import { canTrustedSenderOverride, classifySpam, senderDomain, domainBlockKey, type SpamSettings } from "./lib/spam";
+import { canTrustedSenderOverride, classifySpam, isAuthenticatedSender, senderDomain, domainBlockKey, type SpamSettings } from "./lib/spam";
 import { scanWithRspamd, type RspamdAction } from "./lib/rspamd";
 import { addManagedAddress, addManagedDomain, clearMailboxOperation, getMailboxOperation, getManagedConfig, isRetiredAddress, removeManagedDomain, retireManagedAddress, saveMailboxOperation } from "./lib/managed-config";
 import { disableCatchAll, enableRouting, ensureWorkerRule, inspectCatchAll, inspectRouting, removeWorkerRule } from "./lib/cloudflare-routing";
@@ -639,11 +639,13 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: 
 		? { spam: true, score: 100, reasons: ["Blocked sender domain"] }
 		: classifySpam(parsedEmail, settings.spamFiltering);
 	let rspamdAction: RspamdAction | undefined;
+	let rspamdSymbols: string[] | undefined;
 	let scannerUnavailable = false;
 	if (env.RSPAMD_CHECK_URL && settings.spamFiltering?.enabled !== false && classification.score !== 100) {
 		try {
 			const verdict = await scanWithRspamd(rawEmail, { from: event.from, recipient: mailboxId }, env);
 			rspamdAction = verdict.action;
+			rspamdSymbols = verdict.symbolNames;
 			console.info("Rspamd verdict", JSON.stringify({ messageId, action: verdict.action, score: verdict.score, symbols: verdict.symbols }));
 			classification = { spam: verdict.action !== "no action", score: verdict.score, reasons: [`Rspamd: ${verdict.action}`] };
 		} catch (error) {
@@ -653,7 +655,9 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number; to?: 
 		}
 	}
 	const sender = parsedEmail.from?.address || "";
-	if (!blockedDomain && classification.spam && canTrustedSenderOverride(rspamdAction, scannerUnavailable) && sender && await stub.isTrustedSender(sender)) {
+	if (!blockedDomain && classification.spam && canTrustedSenderOverride(rspamdAction, scannerUnavailable) && sender
+		&& isAuthenticatedSender({ headerFrom: sender, envelopeFrom: event.from, rspamdSymbols })
+		&& await stub.isTrustedSender(sender)) {
 		classification = { spam: false, score: classification.score, reasons: ["Trusted sender"] };
 	}
 

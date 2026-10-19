@@ -23,7 +23,7 @@ test("sends raw MIME and trusted envelope metadata to Rspamd", async () => {
 		assert.deepEqual(new Uint8Array(init.body), message);
 		return Response.json({ action: "add header", score: 7.2, required_score: 6, symbols: { TEST_RULE: { score: 6 }, OTHER_RULE: { score: 1.2 } } });
 	});
-	assert.deepEqual(verdict, { action: "add header", score: 7.2, symbols: [{ name: "TEST_RULE", score: 6 }, { name: "OTHER_RULE", score: 1.2 }] });
+	assert.deepEqual(verdict, { action: "add header", score: 7.2, symbols: [{ name: "TEST_RULE", score: 6 }, { name: "OTHER_RULE", score: 1.2 }], symbolNames: ["TEST_RULE", "OTHER_RULE"] });
 });
 
 test("sends the configured API key with Basic authentication", async () => {
@@ -34,7 +34,7 @@ test("sends the configured API key with Basic authentication", async () => {
 		assert.equal(init.headers.get("Content-Type"), "message/rfc822");
 		return Response.json({ action: "no action", score: -0.1 });
 	});
-	assert.deepEqual(verdict, { action: "no action", score: -0.1, symbols: [] });
+	assert.deepEqual(verdict, { action: "no action", score: -0.1, symbols: [], symbolNames: [] });
 });
 
 test("requires HTTPS and endpoint authentication", async () => {
