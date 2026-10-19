@@ -19,6 +19,14 @@ export interface MailboxSettings {
 	autoDraftEnabled?: boolean;
 }
 
+export interface FilterRule {
+	id: string;
+	name?: string;
+	enabled: boolean;
+	conditions: { from?: string; to?: string; subject?: string; body?: string };
+	actions: { folder?: string; markRead?: boolean; star?: boolean };
+}
+
 export interface Mailbox {
 	id: string;
 	email: string;

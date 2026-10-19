@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react";
 import { type ReactNode, useEffect, useState } from "react";
 import { useParams } from "react-router";
+import MailFilters from "~/components/MailFilters";
 import { useAiEnabled, useMailbox, useUpdateMailbox } from "~/queries/mailboxes";
 import api from "~/services/api";
 import type { Mailbox } from "~/types";
@@ -212,6 +213,10 @@ export default function MailboxPreferences({ mailboxIdOverride, embedded = false
 							</ul>
 						)}
 					</div>
+				</Section>
+
+				<Section title="Filters" description="Rules for new mail that is not junk. Rules run from top to bottom. Only the first rule that matches is used. Filters save at once.">
+					{mailboxId && <MailFilters mailboxId={mailboxId} />}
 				</Section>
 
 				{isDirty && <div role="status" className="sticky bottom-4 z-10 flex items-center justify-end gap-3 rounded-lg border border-kumo-line bg-kumo-base px-4 py-3 shadow-lg">
