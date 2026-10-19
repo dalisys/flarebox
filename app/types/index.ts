@@ -53,6 +53,8 @@ export interface Email {
 	participants?: string;
 	needs_reply?: boolean;
 	has_draft?: boolean;
+	snoozed_until?: string | null;
+	sort_date?: string;
 }
 
 export interface Attachment {

@@ -4,7 +4,7 @@
 
 import { Button, Dialog, Input } from "@cloudflare/kumo";
 import {
-	ArchiveIcon, CaretDownIcon, CaretRightIcon, FileIcon, FolderIcon,
+	ArchiveIcon, CaretDownIcon, ClockIcon, CaretRightIcon, FileIcon, FolderIcon,
 	GearSixIcon, PaperPlaneTiltIcon, PencilSimpleIcon, PlusIcon, ShieldWarningIcon,
 	TrashIcon, TrayIcon, ClockCounterClockwiseIcon, EnvelopeSimpleIcon, XIcon, CaretLeftIcon, RobotIcon,
 } from "@phosphor-icons/react";
@@ -22,6 +22,7 @@ import ThemeToggle from "~/components/ThemeToggle";
 
 const primaryFolders = [
 	{ id: Folders.INBOX, label: "Inbox", icon: TrayIcon },
+	{ id: Folders.SNOOZED, label: "Snoozed", icon: ClockIcon },
 	{ id: Folders.DRAFT, label: "Drafts", icon: FileIcon },
 	{ id: Folders.SENT, label: "Sent", icon: PaperPlaneTiltIcon },
 	{ id: Folders.ARCHIVE, label: "Archive", icon: ArchiveIcon },

@@ -42,6 +42,14 @@ Dates use UTC. The start and end days are included. All filters must match.
 
 Select messages to archive, delete, or mark read or unread. In Junk, use **Empty Junk** to clear it.
 
+## Snooze
+
+Snooze hides a conversation until a time you choose. Open the email and tap the clock button in the toolbar. Pick **Later today** (18:00), **Tomorrow** (08:00), **This weekend** (Saturday 08:00), **Next week** (Monday 08:00), or pick a date and time. You can also select many conversations and tap **Snooze** in the selection bar.
+
+Snoozed mail moves to the **Snoozed** folder. Each row shows when it comes back. At that time it returns to the Inbox as unread, at the top of the list. If push notifications are on, you also get a notification. To bring mail back early, open it in Snoozed and tap the **Unsnooze** button.
+
+Times use your device time zone. The server stores them in UTC and wakes the mail with a Durable Object alarm, so the browser does not need to be open. Mail in Sent, Drafts, Deleted, and Junk cannot be snoozed.
+
 ## Mobile app
 
 - Install Flarebox from your browser as an app (PWA).

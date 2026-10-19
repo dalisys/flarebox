@@ -18,6 +18,7 @@ import {
 import { SendEmailRequestSchema } from "./lib/schemas";
 import { handleReplyEmail, handleForwardEmail } from "./routes/reply-forward";
 import { Folders } from "../shared/folders";
+import { canSnooze } from "../shared/snooze";
 import type { Env } from "./types";
 import { requireMailbox, type MailboxContext } from "./lib/mailbox";
 import { canTrustedSenderOverride, classifySpam, isAuthenticatedSender, senderDomain, domainBlockKey, type SpamSettings } from "./lib/spam";
@@ -51,11 +52,13 @@ const DraftBody = z.object({
 });
 
 const BulkEmailBody = z.object({
-	action: z.enum(["archive", "read", "unread", "delete"]),
+	action: z.enum(["archive", "read", "unread", "delete", "snooze", "unsnooze"]),
 	folder: z.string().min(1),
 	ids: z.array(z.string().min(1)).min(1).max(100).optional(),
 	expandThreads: z.boolean().optional(),
+	until: z.string().datetime({ offset: true }).optional(),
 });
+
 
 // -- Helpers --------------------------------------------------------
 
@@ -388,7 +391,15 @@ app.post("/api/v1/mailboxes/:mailboxId/finalize-delete", async (c) => {
 app.post("/api/v1/mailboxes/:mailboxId/emails/bulk", async (c: AppContext) => {
 	const parsed = BulkEmailBody.safeParse(await c.req.json());
 	if (!parsed.success || !parsed.data.ids) return c.json({ error: "Select up to 100 messages" }, 400);
-	const { count, attachments } = await c.var.mailboxStub.bulkEmails(parsed.data.action, parsed.data.folder, parsed.data.ids, parsed.data.expandThreads);
+	const { action, folder, until } = parsed.data;
+	let snoozeUntil: string | undefined;
+	if (action === "snooze") {
+		if (!canSnooze(folder)) return c.json({ error: "Mail in this folder cannot be snoozed" }, 400);
+		if (!until || Date.parse(until) <= Date.now()) return c.json({ error: "Choose a time in the future" }, 400);
+		snoozeUntil = new Date(until).toISOString();
+	}
+	if (action === "unsnooze" && folder !== Folders.SNOOZED) return c.json({ error: "Only snoozed mail can be unsnoozed" }, 400);
+	const { count, attachments } = await c.var.mailboxStub.bulkEmails(action, folder, parsed.data.ids, parsed.data.expandThreads, snoozeUntil, decodeURIComponent(c.req.param("mailboxId")!));
 	for (let i = 0; i < attachments.length; i += 1000) await c.env.BUCKET.delete(attachments.slice(i, i + 1000));
 	return c.json({ count });
 });

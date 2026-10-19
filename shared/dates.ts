@@ -104,3 +104,20 @@ export function formatQuotedDate(dateStr: string | undefined): string {
 		hour12: true,
 	});
 }
+
+/**
+ * Snooze wake-up time in list rows.
+ * "Oct 20, 8:00 AM" (adds the year when it is not this year)
+ */
+export function formatSnoozeDate(dateStr: string): string {
+	const date = safeParse(dateStr);
+	if (!date) return dateStr;
+
+	return date.toLocaleString(undefined, {
+		month: "short",
+		day: "numeric",
+		year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+	});
+}

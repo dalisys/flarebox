@@ -11,6 +11,7 @@ import * as schema from "../db/schema";
 import { Folders } from "../../shared/folders";
 import type { Env } from "../types";
 import { applyMigrations, mailboxMigrations } from "./migrations";
+import { notifyNewEmail } from "../lib/push";
 
 /**
  * SQL expression to normalize email subjects by stripping common
@@ -312,7 +313,8 @@ export class MailboxDO extends DurableObject<Env> {
 					SUM(CASE WHEN read = 0 THEN 1 ELSE 0 END) as thread_unread_count,
 					SUM(CASE WHEN read = 1 THEN 1 ELSE 0 END) as thread_read_count,
 					GROUP_CONCAT(DISTINCT sender) as participants,
-					SUM(CASE WHEN folder_id = (SELECT id FROM folders WHERE name = 'draft' LIMIT 1) THEN 1 ELSE 0 END) as has_draft
+					SUM(CASE WHEN folder_id = (SELECT id FROM folders WHERE name = 'draft' LIMIT 1) THEN 1 ELSE 0 END) as has_draft,
+					MAX(woke_at) as woke_at
 				FROM all_emails_with_conversation
 				WHERE conversation_id IN (
 					SELECT DISTINCT conversation_id FROM all_emails_with_conversation
@@ -342,9 +344,10 @@ export class MailboxDO extends DurableObject<Env> {
 			SELECT
 				lif.id, lif.subject, lif.sender, lif.recipient, lif.date,
 				lif.read, lif.starred, lif.thread_id, lif.folder_id,
-				lif.in_reply_to, lif.email_references,
+				lif.in_reply_to, lif.email_references, lif.snoozed_until,
 				SUBSTR(lif.body, 1, 300) as snippet,
 				cs.thread_count, cs.thread_unread_count, cs.participants,
+				MAX(lif.date, COALESCE(cs.woke_at, lif.date)) as sort_date,
 				CASE WHEN lmc.folder_id != (SELECT id FROM folders WHERE name = 'sent' LIMIT 1)
 					AND lmc.folder_id != (SELECT id FROM folders WHERE name = 'draft' LIMIT 1)
 					AND cs.thread_read_count > 0
@@ -355,7 +358,7 @@ export class MailboxDO extends DurableObject<Env> {
 			LEFT JOIN latest_message_per_conversation lmc
 				ON lmc.conversation_id = lif.conversation_id AND lmc.rn = 1
 			WHERE lif.rn = 1
-			ORDER BY lif.date DESC
+			ORDER BY sort_date DESC
 			LIMIT ?2 OFFSET ?3`,
 			folder, limit, offset
 		);
@@ -572,8 +575,8 @@ export class MailboxDO extends DurableObject<Env> {
 		return emailAttachments;
 	}
 
-	bulkEmails(action: "archive" | "read" | "unread" | "delete" | "purge", folder: string, ids: string[] | "all", expandThreads = true) {
-		return this.ctx.storage.transactionSync(() => {
+	async bulkEmails(action: "archive" | "read" | "unread" | "delete" | "purge" | "snooze" | "unsnooze", folder: string, ids: string[] | "all", expandThreads = true, snoozeUntil?: string, mailboxId?: string) {
+		const result = this.ctx.storage.transactionSync(() => {
 			const selected = ids === "all"
 				? [...this.ctx.storage.sql.exec("SELECT id, thread_id FROM emails WHERE folder_id = ?", folder)]
 				: ids.flatMap((id) => [...this.ctx.storage.sql.exec(`SELECT id, thread_id, ${NORMALIZED_SUBJECT_SQL} AS normalized_subject FROM emails WHERE id = ? AND folder_id = ?`, id, folder)]);
@@ -596,12 +599,52 @@ export class MailboxDO extends DurableObject<Env> {
 					this.ctx.storage.sql.exec("UPDATE emails SET folder_id = ? WHERE id = ?", Folders.TRASH, id);
 				} else if (action === "archive") {
 					this.ctx.storage.sql.exec("UPDATE emails SET folder_id = ? WHERE id = ?", Folders.ARCHIVE, id);
+				} else if (action === "snooze") {
+					this.ctx.storage.sql.exec("UPDATE emails SET folder_id = ?, snoozed_until = ? WHERE id = ?", Folders.SNOOZED, snoozeUntil ?? null, id);
+				} else if (action === "unsnooze") {
+					this.ctx.storage.sql.exec("UPDATE emails SET folder_id = ?, snoozed_until = NULL WHERE id = ? AND folder_id = ?", Folders.INBOX, id, Folders.SNOOZED);
 				} else {
 					this.ctx.storage.sql.exec("UPDATE emails SET read = ? WHERE id = ?", action === "read" ? 1 : 0, id);
 				}
 			}
 			return { count: targets.size, attachments };
 		});
+		if (action === "snooze" || action === "unsnooze") {
+			// The alarm has no request context, so keep the address for the push link.
+			if (mailboxId) await this.ctx.storage.put("mailboxId", mailboxId);
+			await this.scheduleSnoozeAlarm();
+		}
+		return result;
+	}
+
+	// ── Snooze wake-up (Durable Object alarm) ──────────────────────
+	// The only alarm user in this object; set to the earliest due snooze.
+
+	private async scheduleSnoozeAlarm() {
+		const row = [...this.ctx.storage.sql.exec("SELECT MIN(snoozed_until) AS next FROM emails WHERE folder_id = ?", Folders.SNOOZED)][0];
+		if (row?.next) await this.ctx.storage.setAlarm(Date.parse(String(row.next)));
+		else await this.ctx.storage.deleteAlarm();
+	}
+
+	async alarm() {
+		const now = new Date().toISOString();
+		const woken = [...this.ctx.storage.sql.exec(
+			"UPDATE emails SET folder_id = ?, read = 0, snoozed_until = NULL, woke_at = ? WHERE folder_id = ? AND snoozed_until <= ? RETURNING id, sender, subject",
+			Folders.INBOX, now, Folders.SNOOZED, now,
+		)] as { id: string; sender: string | null; subject: string | null }[];
+		await this.scheduleSnoozeAlarm();
+		const mailboxId = await this.ctx.storage.get<string>("mailboxId");
+		if (!woken.length || !mailboxId) return;
+		try {
+			await notifyNewEmail(this.env, {
+				mailboxId,
+				emailId: woken[0].id,
+				sender: woken.length === 1 ? `Snoozed: ${woken[0].sender || "email"}` : `${woken.length} snoozed emails are back`,
+				subject: woken[0].subject || "",
+			});
+		} catch (e) {
+			console.error("Snooze push failed:", (e as Error).message);
+		}
 	}
 
 	async getAttachment(id: string) {
@@ -676,6 +719,8 @@ export class MailboxDO extends DurableObject<Env> {
 	}
 
 	async moveEmail(id: string, folderId: string) {
+		// Snoozing needs a wake time, so it goes through bulkEmails("snooze").
+		if (folderId === Folders.SNOOZED) return false;
 		const folder = this.db
 			.select({ id: schema.folders.id })
 			.from(schema.folders)
