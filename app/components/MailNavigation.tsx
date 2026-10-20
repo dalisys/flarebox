@@ -1,10 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import Sidebar from "~/components/Sidebar";
+import { useResizableWidth } from "~/hooks/useResizableWidth";
 import { useUIStore } from "~/hooks/useUIStore";
 
 export default function MailNavigation() {
 	const { isSidebarOpen, isDesktopSidebarCollapsed, closeSidebar } = useUIStore();
 	const navigationRef = useRef<HTMLDivElement>(null);
+	const [width, resizeHandle] = useResizableWidth("flarebox-nav-width", 272, 200, 420, "right", "Resize navigation");
 
 	useEffect(() => {
 		if (!isSidebarOpen || !matchMedia("(max-width: 767px)").matches) return;
@@ -46,6 +48,6 @@ export default function MailNavigation() {
 
 	return <>
 		{isSidebarOpen && <button type="button" className="mail-navigation-backdrop md:hidden" onClick={closeSidebar} aria-label="Close navigation" tabIndex={-1} />}
-		<div ref={navigationRef} id="mail-navigation" className={`mail-navigation ${isSidebarOpen ? "is-open" : ""} ${isDesktopSidebarCollapsed ? "is-collapsed" : ""}`}><Sidebar /></div>
+		<div ref={navigationRef} id="mail-navigation" className={`mail-navigation ${isSidebarOpen ? "is-open" : ""} ${isDesktopSidebarCollapsed ? "is-collapsed" : ""}`} style={{ "--nav-width": `${width}px` } as CSSProperties}><Sidebar />{resizeHandle}</div>
 	</>;
 }

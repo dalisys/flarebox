@@ -3,7 +3,7 @@
 //     https://opensource.org/licenses/Apache-2.0
 
 import { useKumoToastManager } from "@cloudflare/kumo";
-import { ArrowBendUpLeftIcon, ArrowBendUpRightIcon, ArrowLeftIcon } from "@phosphor-icons/react";
+import { ArrowBendUpLeftIcon, ArrowBendUpRightIcon, ArrowLeftIcon, SparkleIcon } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { Folders } from "shared/folders";
@@ -17,7 +17,7 @@ import api from "~/services/api";
 import { formatDetailDate } from "shared/dates";
 import { useBulkEmails, useScheduledAction, useDeleteEmail, useEmail, useMarkThreadRead, useMarkNotSpam, useMarkSpam, useMoveEmail, useReplyToEmail, useSendEmail, useThreadReplies, useUpdateEmail } from "~/queries/emails";
 import { useFolders } from "~/queries/folders";
-import { useMailbox } from "~/queries/mailboxes";
+import { useAiEnabled, useMailbox } from "~/queries/mailboxes";
 import { useUIStore } from "~/hooks/useUIStore";
 import type { Email, Folder, Mailbox } from "~/types";
 
@@ -68,6 +68,7 @@ export default function EmailPanel({ emailId, mailboxId: mailboxOverride, folder
 	const scheduledMut = useScheduledAction();
 	const sendEmailMut = useSendEmail();
 	const replyMut = useReplyToEmail();
+	const aiEnabled = useAiEnabled();
 	const { data: folders = [] } = useFolders(mailboxId) as { data?: Folder[] };
 	const { data: currentMailbox } = useMailbox(mailboxId) as {
 		data?: Mailbox;
@@ -322,6 +323,7 @@ export default function EmailPanel({ emailId, mailboxId: mailboxOverride, folder
 			</div>
 			{!isDraftFolder && <div className="mail-reader-reply">
 				<button type="button" onClick={() => startCompose({ mode: "reply", originalEmail: lastReceivedMessage })}><ArrowBendUpLeftIcon size={22} />Reply</button>
+				{aiEnabled && <button type="button" onClick={() => startCompose({ mode: "reply", originalEmail: lastReceivedMessage, withAi: true })}><SparkleIcon size={22} />Reply with AI</button>}
 				<button type="button" onClick={() => startCompose({ mode: "forward", originalEmail: email })}><ArrowBendUpRightIcon size={22} />Forward</button>
 			</div>}
 

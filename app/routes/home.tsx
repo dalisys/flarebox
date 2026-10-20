@@ -3,7 +3,7 @@
 //     https://opensource.org/licenses/Apache-2.0
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "react-router";
 import CombinedInbox from "~/components/CombinedInbox";
 import ComposePanel from "~/components/ComposePanel";
@@ -13,6 +13,7 @@ import MailNavigation from "~/components/MailNavigation";
 import FloatingCompose from "~/components/FloatingCompose";
 import AgentSheet from "~/components/AgentSheet";
 import { useBackToClose } from "~/hooks/useBackToClose";
+import { useResizableWidth } from "~/hooks/useResizableWidth";
 import { useUIStore } from "~/hooks/useUIStore";
 import { queryKeys } from "~/queries/keys";
 import { useMailboxes } from "~/queries/mailboxes";
@@ -28,6 +29,7 @@ export default function HomeRoute() {
 	const [messageOrder, setMessageOrder] = useState<{ id: string; mailboxId: string; folder: string }[]>([]);
 	const [searchParams] = useSearchParams();
 	const autoCreateDone = useRef(false);
+	const [listWidth, listResizeHandle] = useResizableWidth("flarebox-list-width", 380, 280, 720, "right", "Resize message list");
 	const folder = searchParams.get("folder") || "inbox";
 	const searchQuery = searchParams.get("q");
 	const composeMailbox = mailboxes.find((mailbox) => !mailbox.retired);
@@ -56,7 +58,7 @@ export default function HomeRoute() {
 		<div className="flex min-h-0 min-w-0 flex-1 flex-col">
 			<div className={selectedEmail || isComposing ? "hidden md:block" : ""}><Header /></div>
 			<main className="mail-workspace relative flex min-h-0 flex-1">
-				<div className={`min-w-0 ${selectedEmail || isComposing ? "hidden md:block md:w-[380px] md:shrink-0 md:border-r md:border-kumo-line" : "w-full"}`}><CombinedInbox mailboxes={mailboxes} folder={folder} onSelect={(email, messages) => { closeCompose(); setMessageOrder(messages); setSelectedEmail(email); }} /></div>
+				<div style={{ "--list-width": `${listWidth}px` } as CSSProperties} className={`min-w-0 ${selectedEmail || isComposing ? "hidden md:relative md:block md:w-[var(--list-width)] md:shrink-0 md:border-r md:border-kumo-line" : "w-full"}`}>{(selectedEmail || isComposing) && listResizeHandle}<CombinedInbox mailboxes={mailboxes} folder={folder} onSelect={(email, messages) => { closeCompose(); setMessageOrder(messages); setSelectedEmail(email); }} /></div>
 				{(selectedEmail || isComposing) && <div className="min-w-0 flex-1 overflow-hidden">{isComposing ? <ComposePanel mailboxId={selectedEmail?.mailboxId} /> : selectedEmail && <div className="flex h-full flex-col"><EmailPanel key={`${selectedEmail.mailboxId}/${selectedEmail.id}`} onNavigate={(direction) => {
 					const index = messageOrder.findIndex((item) => item.id === selectedEmail.id && item.mailboxId === selectedEmail.mailboxId);
 					const next = messageOrder[index + (direction === "next" ? 1 : -1)];

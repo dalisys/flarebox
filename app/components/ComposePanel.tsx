@@ -9,6 +9,7 @@ import { useParams } from "react-router";
 import { sendLaterPresets } from "shared/schedule-time";
 import DateTimePicker from "~/components/DateTimePicker";
 import { useComposeForm } from "~/hooks/useComposeForm";
+import { useUIStore } from "~/hooks/useUIStore";
 import { useAiEnabled } from "~/queries/mailboxes";
 import RichTextEditor from "./RichTextEditor";
 
@@ -47,7 +48,7 @@ export default function ComposePanel({ mailboxId: mailboxOverride }: { mailboxId
 
 	const fieldId = useId();
 	const aiEnabled = useAiEnabled();
-	const [showAi, setShowAi] = useState(false);
+	const [showAi, setShowAi] = useState(() => useUIStore.getState().composeOptions.withAi === true);
 	const [instructions, setInstructions] = useState("");
 	const busy = isSending || isWriting;
 	const [showFormatting, setShowFormatting] = useState(false);

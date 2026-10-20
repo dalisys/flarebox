@@ -197,10 +197,17 @@ button, a, input, select, textarea {
 .mail-navigation {
 	position: relative;
 	flex-shrink: 0;
-	width: 272px;
+	width: var(--nav-width, 272px);
 }
 
 .mail-navigation.is-collapsed { display: none; }
+
+.resize-handle { position: absolute; top: 0; bottom: 0; z-index: 5; width: 8px; cursor: col-resize; touch-action: none; }
+.resize-handle.is-right { right: -4px; }
+.resize-handle.is-left { left: -4px; }
+.resize-handle:hover, .resize-handle:focus-visible { background: var(--color-kumo-line); outline: none; }
+@media (max-width: 767px) { .resize-handle { display: none; } }
+@media (max-width: 1023px) { .agent-sheet .resize-handle { display: none; } }
 
 .mail-navigation-backdrop {
 	position: fixed;
