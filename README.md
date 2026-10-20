@@ -4,7 +4,7 @@ Self-hosted email client with an AI agent. Runs on Cloudflare Workers, Durable O
 
 Fork of Cloudflare's [Agentic Inbox](https://github.com/cloudflare/agentic-inbox). Apache 2.0.
 
-![Flarebox](./demo_app.png)
+<img src="./screenshots/flarebox.png" alt="Flarebox on desktop with one inbox for several addresses, and on a phone with swipe to archive" width="640">
 
 ---
 
