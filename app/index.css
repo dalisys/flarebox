@@ -260,6 +260,7 @@ button.mail-compose:hover { filter: brightness(1.08); box-shadow: 0 2px 6px rgb(
 
 .mail-message-row:hover { background: var(--color-kumo-tint); box-shadow: inset 0 -1px 0 var(--color-kumo-line); }
 .mail-message-row.is-selected, .mail-message-row.is-checked { background: var(--mail-selected); }
+.mail-message-row.is-unread:not(:hover, .is-selected, .is-checked) { background: color-mix(in srgb, var(--color-kumo-brand) 6%, var(--color-kumo-base)); }
 .mail-row-checkbox { width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--color-kumo-brand); cursor: pointer; }
 .mail-message-open { cursor: pointer; }
 
@@ -287,8 +288,18 @@ button.mail-compose:hover { filter: brightness(1.08); box-shadow: 0 2px 6px rgb(
 .mail-message-account { color: var(--text-color-kumo-subtle); font-size: 11px; margin-top: 4px; }
 .mail-message-date { color: var(--text-color-kumo-subtle); font-size: 11px; font-variant-numeric: tabular-nums; }
 .mail-message-preview > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mail-message-row.is-unread .mail-message-sender, .mail-message-row.is-unread .mail-message-subject { font-weight: 600; }
-.mail-message-row.is-unread .mail-message-date { color: var(--text-color-kumo-link); font-weight: 600; }
+/* Read and unread must differ by more than weight: the font may not have a 600 face. */
+.mail-message-row:not(.is-unread) .mail-message-sender, .mail-message-row:not(.is-unread) .mail-message-subject { color: var(--text-color-kumo-strong); font-weight: 400; }
+.mail-message-row.is-unread .mail-message-sender, .mail-message-row.is-unread .mail-message-subject { color: var(--text-color-kumo-default); font-weight: 700; }
+.mail-message-row.is-unread .mail-message-sender::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--color-kumo-brand); vertical-align: middle; }
+.mail-message-row.is-unread .mail-message-date { color: var(--text-color-kumo-link); font-weight: 700; }
+
+.mail-swipe { position: relative; overflow: hidden; touch-action: pan-y; }
+.mail-swipe > .mail-message-row { transform: translateX(var(--swipe-x, 0)); transition: transform var(--swipe-speed, 180ms) ease, background 120ms, box-shadow 120ms; }
+.mail-swipe-action { position: absolute; inset: 0; display: flex; align-items: center; gap: 8px; padding: 0 24px; color: #fff; font-size: 14px; font-weight: 600; background: var(--color-kumo-brand); }
+.mail-swipe-action.is-left { justify-content: flex-end; }
+.mail-swipe-action.is-archive { background: #188038; }
+.mail-swipe-action.is-delete { background: #d93025; }
 .mail-message-star { order: 2; align-self: flex-end; }
 
 .floating-compose {
@@ -337,7 +348,8 @@ button.mail-compose:hover { filter: brightness(1.08); box-shadow: 0 2px 6px rgb(
 	.mail-folder { min-height: 52px; padding: 12px 22px; font-size: 15px; gap: 24px; }
 	.mail-message-scroll { padding: 0 8px calc(104px + env(safe-area-max-inset-bottom, env(safe-area-inset-bottom, 0px))); }
 	.mail-message-row { min-height: 112px; gap: 12px; padding: 16px; border-bottom: 2px solid var(--mail-shell); border-radius: 4px; align-items: flex-start; }
-	.mail-message-row:first-child { border-radius: 20px 20px 4px 4px; }
+	:not(.mail-swipe) > .mail-message-row:first-child, .mail-swipe:first-child, .mail-swipe:first-child > .mail-message-row { border-radius: 20px 20px 4px 4px; }
+	.mail-swipe { border-radius: 4px; }
 	.mail-row-checkbox { position: absolute; z-index: 1; left: 28px; top: 29px; width: 20px; height: 20px; opacity: 0; }
 	.mail-row-checkbox:focus-visible, .mail-row-checkbox:checked { opacity: 1; }
 	.mail-row-checkbox:checked + .sender-avatar, .mail-row-checkbox:checked + .mail-message-open > .sender-avatar { visibility: hidden; }

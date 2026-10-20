@@ -28,6 +28,7 @@ import type { BulkAction } from "~/services/api";
 import MailboxSplitView from "~/components/MailboxSplitView";
 import EmailStarButton from "~/components/EmailStarButton";
 import SenderAvatar, { senderName } from "~/components/SenderAvatar";
+import { type SwipeAction, SwipeRow } from "~/components/SwipeActions";
 import { getSnippetText } from "~/lib/utils";
 import {
 	useDeleteEmail,
@@ -334,6 +335,21 @@ export default function EmailListRoute() {
 			setSelectedIds(new Set());
 		} catch (error) { setBulkError(error instanceof Error ? error.message : "Could not update selected messages."); }
 	};
+	const runSwipe = async (email: Email, swipe: Exclude<SwipeAction, "none">) => {
+		if (!mailboxId || !folder) return;
+		const action: BulkAction = swipe === "toggle-read" ? (hasUnread(email) ? "read" : "unread") : swipe;
+		const emailFolder = folder === "activity" ? email.folder_id || Folders.INBOX : folder;
+		if (action === "delete" && emailFolder === Folders.TRASH && !window.confirm("Permanently delete this conversation?")) return;
+		setBulkError("");
+		try {
+			await bulkEmails.mutateAsync({ mailboxId, folder: emailFolder, action, ids: [email.id], expandThreads: folder !== "activity" });
+			if (selectedEmailId === email.id && action !== "read" && action !== "unread") closePanel();
+		} catch (error) { setBulkError(error instanceof Error ? error.message : "Could not update the message."); }
+	};
+	const canArchive = (email: Email) => {
+		const emailFolder = folder === "activity" ? email.folder_id || Folders.INBOX : folder;
+		return emailFolder !== Folders.ARCHIVE && emailFolder !== Folders.TRASH && emailFolder !== Folders.SCHEDULED;
+	};
 	const runEmptyJunk = async () => {
 		if (!mailboxId || !window.confirm(`Permanently delete all ${totalCount} junk conversation${totalCount === 1 ? "" : "s"} in this account?`)) return;
 		setBulkError("");
@@ -414,8 +430,8 @@ export default function EmailListRoute() {
 								const isSelected = selectedEmailId === email.id;
 								const snippet = getSnippetText(email.snippet);
 								return (
+									<SwipeRow key={email.id} unread={hasUnread(email)} canArchive={canArchive(email)} onSwipe={(action) => runSwipe(email, action)}>
 									<div
-										key={email.id}
 										role="button"
 										tabIndex={0}
 										onClick={() => handleRowClick(email)}
@@ -509,6 +525,7 @@ export default function EmailListRoute() {
 											</Tooltip>
 										</div>
 									</div>
+									</SwipeRow>
 								);
 							})}
 							{hasMore && <div ref={loadMoreRef} className="flex min-h-14 items-center justify-center py-4" aria-live="polite">{isLoadingMore ? <Loader size="sm" /> : <span className="sr-only">Scroll to load more</span>}</div>}

@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import SenderAvatar, { senderName } from "~/components/SenderAvatar";
 import EmailStarButton from "~/components/EmailStarButton";
+import { type SwipeAction, SwipeRow } from "~/components/SwipeActions";
 import { AccountColorDot } from "~/components/AccountMarks";
 import { buildSearchQuery, parseSearchQuery, searchQueryParams } from "~/lib/search-parser";
 import { formatListDate, formatSnoozeDate } from "shared/dates";
@@ -92,14 +93,25 @@ export default function CombinedInbox({ mailboxes, folder, onSelect }: { mailbox
 	const visibleKeys = visibleEmails.map(keyOf);
 	const selectedEmails = emails.filter((email) => selectedKeys.has(keyOf(email)));
 	const allVisibleSelected = visibleKeys.length > 0 && visibleKeys.every((key) => selectedKeys.has(key));
+	const folderOf = (email: CombinedEmail) => folder === "activity" || searching ? email.folder_id || Folders.INBOX : folder;
 	const runBulk = async (action: BulkAction, until?: string) => {
 		if (!selectedEmails.length) return;
 		setSnoozeOpen(false);
 		if (action === "delete" && !window.confirm(`Delete ${selectedEmails.length} selected conversation${selectedEmails.length === 1 ? "" : "s"}? Messages in Trash will be permanently deleted.`)) return;
+		if (await apply(selectedEmails, action, until)) setSelectedKeys(new Set());
+	};
+	const runSwipe = async (email: CombinedEmail, swipe: Exclude<SwipeAction, "none">) => {
+		const unread = email.thread_unread_count !== undefined ? email.thread_unread_count > 0 : !email.read;
+		const action: BulkAction = swipe === "toggle-read" ? (unread ? "read" : "unread") : swipe;
+		if (action === "delete" && folderOf(email) === Folders.TRASH && !window.confirm("Permanently delete this conversation?")) return;
+		await apply([email], action);
+	};
+	/** Returns true when every message was updated. */
+	const apply = async (selectedEmails: CombinedEmail[], action: BulkAction, until?: string) => {
 		setBusy(true); setError("");
 		const groups = new Map<string, { mailboxId: string; folderId: string; ids: string[] }>();
 		for (const email of selectedEmails) {
-			const folderId = folder === "activity" || searching ? email.folder_id || Folders.INBOX : folder;
+			const folderId = folderOf(email);
 			const key = `${email.mailboxId}\u0000${folderId}`;
 			if (!groups.has(key)) groups.set(key, { mailboxId: email.mailboxId, folderId, ids: [] });
 			groups.get(key)!.ids.push(email.id);
@@ -111,9 +123,10 @@ export default function CombinedInbox({ mailboxes, folder, onSelect }: { mailbox
 			queryClient.invalidateQueries({ queryKey: ["emails", mailboxId] }),
 			queryClient.invalidateQueries({ queryKey: ["folders", mailboxId] }),
 		])));
-		if (results.some((result) => result.status === "rejected")) setError("Some messages could not be updated. Refresh and try again.");
-		else setSelectedKeys(new Set());
+		const failed = results.some((result) => result.status === "rejected");
+		if (failed) setError("Some messages could not be updated. Refresh and try again.");
 		setBusy(false);
+		return !failed;
 	};
 	const emptyJunk = async () => {
 		if (!window.confirm(`Permanently delete all Junk messages in ${mailboxes.length} account${mailboxes.length === 1 ? "" : "s"}?`)) return;
@@ -160,7 +173,8 @@ export default function CombinedInbox({ mailboxes, folder, onSelect }: { mailbox
 				const unread = email.thread_unread_count !== undefined ? email.thread_unread_count > 0 : !email.read;
 				const emailFolder = folder === "activity" || searching ? email.folder_id || "inbox" : folder;
 				const sender = folder === "sent" || folder === "draft" || folder === Folders.SCHEDULED ? email.recipient : email.sender;
-				return <div key={keyOf(email)} className={`mail-message-row ${unread ? "is-unread" : ""} ${selectedKeys.has(keyOf(email)) ? "is-checked" : ""}`}>
+				const archivable = emailFolder !== Folders.ARCHIVE && emailFolder !== Folders.TRASH && emailFolder !== Folders.SCHEDULED;
+				return <SwipeRow key={keyOf(email)} unread={unread} canArchive={archivable} onSwipe={(action) => runSwipe(email, action)}><div className={`mail-message-row ${unread ? "is-unread" : ""} ${selectedKeys.has(keyOf(email)) ? "is-checked" : ""}`}>
 					<input type="checkbox" aria-label={`Select ${email.subject || "message"} in ${email.mailboxId}`} checked={selectedKeys.has(keyOf(email))} onChange={() => setSelectedKeys((current) => { const next = new Set(current); const key = keyOf(email); if (next.has(key)) next.delete(key); else next.add(key); return next; })} className="mail-row-checkbox" />
 					<button type="button" onClick={() => onSelect({ id: email.id, mailboxId: email.mailboxId, folder: emailFolder }, visibleEmails.map((item) => ({ id: item.id, mailboxId: item.mailboxId, folder: folder === "activity" || searching ? item.folder_id || "inbox" : folder })))} className="mail-message-open flex min-w-0 flex-1 items-start gap-4 text-left">
 						<SenderAvatar sender={sender} />
@@ -172,7 +186,7 @@ export default function CombinedInbox({ mailboxes, folder, onSelect }: { mailbox
 						</span>
 					</button>
 					<EmailStarButton mailboxId={email.mailboxId} id={email.id} starred={email.starred} />
-				</div>;
+				</div></SwipeRow>;
 			})}
 			{hasMore && <div ref={loadMoreRef} className="p-4 text-center"><Button variant="secondary" size="sm" disabled={isLoading} onClick={() => setPages((value) => value + 1)}>{isLoading ? "Loading…" : "Load older messages"}</Button></div>}
 		</div>
