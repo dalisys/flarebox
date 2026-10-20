@@ -149,6 +149,20 @@ export function getSignatureBlock(settings?: {
 }
 
 /**
+ * Turn an email body into safe HTML for the compose editor. Keeps text structure
+ * (paragraphs, lines, lists, links, bold) and drops scripts, styles and images.
+ * Plain-text bodies keep their line breaks.
+ */
+export function quotableHtml(body: string): string {
+	if (!/<\/?(?:html|body|p|div|br|span|a|table|td|font|b|strong|i|em|ul|ol|li|h[1-6])[\s/>]/i.test(body)) return escapeHtml(body).replace(/\n/g, "<br>");
+	// Table cells become blocks; otherwise the editor joins cells in a row into one line.
+	return DOMPurify.sanitize(body, {
+		ALLOWED_TAGS: ["p", "br", "div", "span", "a", "b", "strong", "i", "em", "u", "ul", "ol", "li", "blockquote", "h1", "h2", "h3", "h4", "pre", "code", "hr", "td", "th"],
+		ALLOWED_ATTR: ["href"],
+	}).replace(/<(\/?)t[dh]>/g, "<$1div>");
+}
+
+/**
  * Build a quoted reply block HTML string from original email data.
  */
 export function buildQuotedReplyBlock(
@@ -162,11 +176,8 @@ export function buildQuotedReplyBlock(
 	// HTML-escape sender to prevent <john@example.com> from disappearing as a tag
 	const escapedSender = escapeHtml(sender);
 
-	// Sanitize the body to plain text to prevent stored XSS.
-	// The original HTML renders safely in the sandboxed iframe, but quoted
-	// reply blocks are injected into the compose editor where raw HTML would
-	// execute. Convert to escaped plain text instead.
-	const bodyToQuote = escapeHtml(stripHtml(body)).replace(/\n/g, "<br>");
+	// Quoted blocks go into the compose editor, so the body is sanitized first (no stored XSS).
+	const bodyToQuote = quotableHtml(body);
 
 	return `<br><blockquote style="border-left: 2px solid #ccc; margin: 0; padding-left: 1em; color: #666;">On ${formattedDate}, ${escapedSender} wrote:<br><br>${bodyToQuote}</blockquote>`;
 }
